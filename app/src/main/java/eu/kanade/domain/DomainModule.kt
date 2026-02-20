@@ -38,6 +38,7 @@ import mihon.domain.extensionrepo.service.ExtensionRepoService
 import mihon.domain.migration.usecases.MigrateMangaUseCase
 import mihon.domain.upcoming.interactor.GetUpcomingManga
 import tachiyomi.data.category.CategoryRepositoryImpl
+import tachiyomi.data.pagebookmarks.PageBookmarkRepositoryImpl
 import tachiyomi.data.chapter.ChapterRepositoryImpl
 import tachiyomi.data.history.HistoryRepositoryImpl
 import tachiyomi.data.manga.MangaRepositoryImpl
@@ -48,6 +49,11 @@ import tachiyomi.data.track.TrackRepositoryImpl
 import tachiyomi.data.updates.UpdatesRepositoryImpl
 import tachiyomi.domain.category.interactor.CreateCategoryWithName
 import tachiyomi.domain.category.interactor.DeleteCategory
+import tachiyomi.domain.pagebookmarks.interactor.DeletePageBookmark
+import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
+import tachiyomi.domain.pagebookmarks.interactor.TogglePageBookmark
+import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkNote
+import tachiyomi.domain.pagebookmarks.repository.PageBookmarkRepository
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.HideCategory
 import tachiyomi.domain.category.interactor.RenameCategory
@@ -207,5 +213,11 @@ class DomainModule : InjektModule {
         addFactory { UpdateExtensionRepo(get(), get()) }
         addFactory { ToggleIncognito(get()) }
         addFactory { GetIncognitoState(get(), get(), get()) }
+
+        addSingletonFactory<PageBookmarkRepository> { PageBookmarkRepositoryImpl(get()) }
+        addFactory { GetPageBookmarks(get()) }
+        addFactory { TogglePageBookmark(get()) }
+        addFactory { DeletePageBookmark(get()) }
+        addFactory { UpdatePageBookmarkNote(get()) }
     }
 }

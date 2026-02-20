@@ -3,6 +3,8 @@ package eu.kanade.presentation.reader.appbars
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.BookmarkRemove
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.Public
@@ -22,6 +24,7 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import kotlinx.collections.immutable.ImmutableSet
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
 import tachiyomi.presentation.core.i18n.stringResource
 
@@ -48,6 +51,10 @@ fun ReaderBottomBar(
     onClickPageLayout: () -> Unit,
     onClickShiftPage: () -> Unit,
     // SY <--
+    // KMK -->
+    isCurrentPageBookmarked: Boolean = false,
+    onClickPageBookmark: () -> Unit = {},
+    // KMK <--
     modifier: Modifier = Modifier,
 ) {
     // KMK -->
@@ -178,6 +185,22 @@ fun ReaderBottomBar(
                 )
             }
         }
+
+        // KMK -->
+        if (ReaderBottomButton.PageBookmark.isIn(enabledButtons)) {
+            IconButton(onClick = onClickPageBookmark) {
+                Icon(
+                    imageVector = if (isCurrentPageBookmarked) {
+                        Icons.Outlined.BookmarkRemove
+                    } else {
+                        Icons.Outlined.BookmarkAdd
+                    },
+                    contentDescription = stringResource(KMR.strings.action_bookmark_page),
+                    tint = iconColor,
+                )
+            }
+        }
+        // KMK <--
 
         IconButton(onClick = onClickSettings) {
             Icon(

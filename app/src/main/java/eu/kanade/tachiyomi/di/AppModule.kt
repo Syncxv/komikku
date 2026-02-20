@@ -41,6 +41,7 @@ import tachiyomi.core.common.storage.UniFileTempFileManager
 import tachiyomi.data.AndroidDatabaseHandler
 import tachiyomi.data.Database
 import tachiyomi.data.DatabaseHandler
+import tachiyomi.data.pagebookmarks.PageBookmarksDatabase
 import tachiyomi.data.DateColumnAdapter
 import tachiyomi.data.History
 import tachiyomi.data.Mangas
@@ -123,6 +124,24 @@ class AppModule(val app: Application) : InjektModule {
             )
         }
         addSingletonFactory<DatabaseHandler> { AndroidDatabaseHandler(get(), get()) }
+
+        addSingletonFactory {
+            PageBookmarksDatabase(
+                driver = AndroidSqliteDriver(
+                    schema = PageBookmarksDatabase.Schema,
+                    context = app,
+                    name = "page_bookmarks.db",
+                    callback = object : AndroidSqliteDriver.Callback(PageBookmarksDatabase.Schema) {
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            super.onOpen(db)
+                            val cursor = db.query("PRAGMA journal_mode = WAL")
+                            cursor.moveToFirst()
+                            cursor.close()
+                        }
+                    },
+                ),
+            )
+        }
 
         addSingletonFactory {
             Json {

@@ -19,6 +19,11 @@ android {
                 dialect(libs.sqldelight.dialects.sql)
                 schemaOutputDirectory.set(project.file("./src/main/sqldelight"))
             }
+            create("PageBookmarksDatabase") {
+                packageName.set("tachiyomi.data.pagebookmarks")
+                srcDirs("src/main/sqldelight-pagebookmarks")
+                dialect(libs.sqldelight.dialects.sql)
+            }
         }
     }
 }

@@ -311,10 +311,28 @@ class WebtoonViewer(
     override fun moveToPage(page: ReaderPage) {
         val position = adapter.items.indexOf(page)
         if (position != -1) {
+            // KMK -->
+            val scrollOffset = activity.viewModel.consumePendingScrollOffset()
+            // KMK <--
             layoutManager.scrollToPositionWithOffset(position, 0)
             if (layoutManager.findLastEndVisibleItemPosition() == -1) {
                 onScrolled(pos = position)
             }
+            // KMK -->
+            // Apply scroll offset for page bookmark restoration
+            if (scrollOffset != null && scrollOffset > 0.0) {
+                recycler.doOnLayout {
+                    recycler.post {
+                        val holder = recycler.findViewHolderForAdapterPosition(position)
+                        if (holder != null) {
+                            val itemHeight = holder.itemView.height
+                            val targetScrollY = (scrollOffset * itemHeight).toInt()
+                            recycler.scrollBy(0, targetScrollY)
+                        }
+                    }
+                }
+            }
+            // KMK <--
         } else {
             logcat { "Page $page not found in adapter" }
         }

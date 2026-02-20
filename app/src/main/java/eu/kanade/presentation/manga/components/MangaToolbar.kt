@@ -48,6 +48,9 @@ fun MangaToolbar(
     onClickRefresh: () -> Unit,
     onClickMigrate: (() -> Unit)?,
     onClickEditNotes: () -> Unit,
+    // KMK -->
+    onClickPageBookmarks: (() -> Unit)?,
+    // KMK <--
     // SY -->
     onClickEditInfo: (() -> Unit)?,
     // KMK -->
@@ -190,6 +193,16 @@ fun MangaToolbar(
                             onClick = onClickEditNotes,
                         ),
                     )
+                    // KMK -->
+                    if (onClickPageBookmarks != null) {
+                        add(
+                            AppBar.OverflowAction(
+                                title = stringResource(KMR.strings.page_bookmarks),
+                                onClick = onClickPageBookmarks,
+                            ),
+                        )
+                    }
+                    // KMK <--
                     // SY -->
                     if (onClickMerge != null) {
                         add(

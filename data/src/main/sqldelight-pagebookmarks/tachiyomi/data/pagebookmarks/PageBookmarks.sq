@@ -1,0 +1,59 @@
+CREATE TABLE page_bookmarks (
+    _id           INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    manga_id      INTEGER NOT NULL,
+    chapter_id    INTEGER NOT NULL,
+    chapter_url   TEXT    NOT NULL,
+    chapter_name  TEXT    NOT NULL,
+    page_index    INTEGER NOT NULL,
+    scroll_offset REAL    NOT NULL DEFAULT 0.0,
+    image_url     TEXT    NOT NULL DEFAULT '',
+    crop_top      REAL    NOT NULL DEFAULT 0.0,
+    crop_bottom   REAL    NOT NULL DEFAULT 1.0,
+    added_at      INTEGER NOT NULL,
+    note          TEXT    NOT NULL DEFAULT ''
+);
+
+getBookmarksForManga:
+SELECT *
+FROM page_bookmarks
+WHERE manga_id = :mangaId
+ORDER BY added_at DESC;
+
+getBookmark:
+SELECT *
+FROM page_bookmarks
+WHERE _id = :id;
+
+insert:
+INSERT INTO page_bookmarks(manga_id, chapter_id, chapter_url, chapter_name, page_index, scroll_offset, image_url, crop_top, crop_bottom, added_at, note)
+VALUES (:mangaId, :chapterId, :chapterUrl, :chapterName, :pageIndex, :scrollOffset, :imageUrl, :cropTop, :cropBottom, :addedAt, :note);
+
+delete:
+DELETE FROM page_bookmarks
+WHERE _id = :id;
+
+deleteForManga:
+DELETE FROM page_bookmarks
+WHERE manga_id = :mangaId;
+
+deleteForChapter:
+DELETE FROM page_bookmarks
+WHERE chapter_id = :chapterId;
+
+findExisting:
+SELECT *
+FROM page_bookmarks
+WHERE manga_id = :mangaId
+AND chapter_id = :chapterId
+AND page_index = :pageIndex
+LIMIT 1;
+
+updateNote:
+UPDATE page_bookmarks
+SET note = :note
+WHERE _id = :id;
+
+getAll:
+SELECT *
+FROM page_bookmarks
+ORDER BY added_at DESC;

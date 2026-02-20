@@ -392,6 +392,13 @@ class MangaScreen(
             onMorePreviewsClicked = { openMorePagePreviews(navigator, successState.manga) },
             // SY <--
             onEditNotesClicked = { navigator.push(MangaNotesScreen(manga = successState.manga)) },
+            // KMK -->
+            onPageBookmarksClicked = {
+                navigator.push(
+                    eu.kanade.tachiyomi.ui.manga.pagebookmarks.PageBookmarksScreen(mangaId),
+                )
+            },
+            // KMK <--
             onMultiBookmarkClicked = screenModel::bookmarkChapters,
             onMultiMarkAsReadClicked = screenModel::markChaptersRead,
             onMarkPreviousAsReadClicked = screenModel::markPreviousChapterRead,

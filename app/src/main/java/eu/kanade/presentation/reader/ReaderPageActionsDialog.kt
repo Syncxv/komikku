@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.BookmarkRemove
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material.icons.outlined.Save
@@ -19,8 +21,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.components.AdaptiveSheet
+import eu.kanade.tachiyomi.R
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.i18n.sy.SYMR
@@ -39,6 +43,10 @@ fun ReaderPageActionsDialog(
     onSaveCombined: () -> Unit,
     hasExtraPage: Boolean,
     // SY <--
+    // KMK -->
+    isCurrentPageBookmarked: Boolean = false,
+    onTogglePageBookmark: () -> Unit = {},
+    // KMK <--
 ) {
     var showSetCoverDialog by remember { mutableStateOf(false) }
     // SY -->
@@ -122,6 +130,31 @@ fun ReaderPageActionsDialog(
                     },
                 )
             }
+            // KMK -->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+            ) {
+                ActionButton(
+                    modifier = Modifier.weight(1f),
+                    title = stringResource(
+                        if (isCurrentPageBookmarked) {
+                            KMR.strings.action_unbookmark_page
+                        } else {
+                            KMR.strings.action_bookmark_page
+                        },
+                    ),
+                    icon = if (isCurrentPageBookmarked) {
+                        Icons.Outlined.BookmarkRemove
+                    } else {
+                        Icons.Outlined.BookmarkAdd
+                    },
+                    onClick = {
+                        onTogglePageBookmark()
+                        onDismissRequest()
+                    },
+                )
+            }
+            // KMK <--
             if (hasExtraPage) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),

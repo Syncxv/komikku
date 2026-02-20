@@ -235,6 +235,9 @@ class ReaderActivity : BaseActivity() {
             // SY -->
             val page = intent.extras?.getInt("page", -1).takeUnless { it == -1 }
             // SY <--
+            // KMK -->
+            val scrollOffset = intent.extras?.getDouble("scroll_offset", 0.0).takeUnless { it == 0.0 }
+            // KMK <--
             if (manga == -1L || chapter == -1L) {
                 finish()
                 return
@@ -242,7 +245,7 @@ class ReaderActivity : BaseActivity() {
             NotificationReceiver.dismissNotification(this, manga.hashCode(), Notifications.ID_NEW_CHAPTERS)
 
             lifecycleScope.launchNonCancellable {
-                val initResult = viewModel.init(manga, chapter/* SY --> */, page/* SY <-- */)
+                val initResult = viewModel.init(manga, chapter/* SY --> */, page/* SY <-- *//* KMK --> */, scrollOffset/* KMK <-- */)
                 if (!initResult.getOrDefault(false)) {
                     val exception = initResult.exceptionOrNull() ?: IllegalStateException("Unknown err")
                     withUIContext {
@@ -445,6 +448,10 @@ class ReaderActivity : BaseActivity() {
                             }
                         },
                         hasExtraPage = (state.dialog as? ReaderViewModel.Dialog.PageActions)?.extraPage != null,
+                        // KMK -->
+                        isCurrentPageBookmarked = state.isCurrentPageBookmarked,
+                        onTogglePageBookmark = { viewModel.togglePageBookmark() },
+                        // KMK <--
                     )
                 }
 
@@ -757,6 +764,10 @@ class ReaderActivity : BaseActivity() {
             },
             onClickShiftPage = ::shiftDoublePages,
             // SY <--
+            // KMK -->
+            isCurrentPageBookmarked = state.isCurrentPageBookmarked,
+            onClickPageBookmark = { viewModel.togglePageBookmark() },
+            // KMK <--
         )
     }
 

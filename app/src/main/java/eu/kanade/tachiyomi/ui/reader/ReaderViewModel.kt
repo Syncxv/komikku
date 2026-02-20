@@ -100,6 +100,9 @@ import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.GetMergedMangaById
 import tachiyomi.domain.manga.interactor.GetMergedReferencesById
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
+import tachiyomi.domain.pagebookmarks.interactor.TogglePageBookmark
+import tachiyomi.domain.pagebookmarks.model.PageBookmark
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.source.local.isLocal
 import uy.kohesive.injekt.Injekt
@@ -138,6 +141,10 @@ class ReaderViewModel @JvmOverloads constructor(
     private val getMergedReferencesById: GetMergedReferencesById = Injekt.get(),
     private val getMergedChaptersByMangaId: GetMergedChaptersByMangaId = Injekt.get(),
     // SY <--
+    // KMK -->
+    private val togglePageBookmark: TogglePageBookmark = Injekt.get(),
+    private val getPageBookmarks: GetPageBookmarks = Injekt.get(),
+    // KMK <--
 ) : ViewModel() {
 
     private val mutableState = MutableStateFlow(State())
@@ -415,7 +422,7 @@ class ReaderViewModel @JvmOverloads constructor(
      * Initializes this presenter with the given [mangaId] and [initialChapterId]. This method will
      * fetch the manga from the database and initialize the initial chapter.
      */
-    suspend fun init(mangaId: Long, initialChapterId: Long /* SY --> */, page: Int?/* SY <-- */): Result<Boolean> {
+    suspend fun init(mangaId: Long, initialChapterId: Long /* SY --> */, page: Int?/* SY <-- *//* KMK --> */, scrollOffset: Double? = null/* KMK <-- */): Result<Boolean> {
         if (!needsInit()) return Result.success(true)
         return withIOContext {
             try {
@@ -488,6 +495,11 @@ class ReaderViewModel @JvmOverloads constructor(
                         page,
                         // SY <--
                     )
+                    // KMK -->
+                    if (scrollOffset != null && scrollOffset > 0.0) {
+                        mutableState.update { it.copy(pendingScrollOffset = scrollOffset) }
+                    }
+                    // KMK <--
                     Result.success(true)
                 } else {
                     // Unlikely but okay
@@ -685,6 +697,10 @@ class ReaderViewModel @JvmOverloads constructor(
 
         val selectedChapter = page.chapter
         val pages = selectedChapter.pages ?: return
+
+        // KMK -->
+        checkCurrentPageBookmark(page)
+        // KMK <--
 
         // Save last page read and mark as read if needed
         viewModelScope.launchNonCancellable {
@@ -982,6 +998,61 @@ class ReaderViewModel @JvmOverloads constructor(
             )
         }
     }
+
+    // KMK -->
+    /**
+     * Toggles a page bookmark for the currently active page.
+     * Captures page index, image URL, and for webtoon mode, the visible crop region.
+     */
+    fun togglePageBookmark(
+        scrollOffset: Double = 0.0,
+        cropTop: Double = 0.0,
+        cropBottom: Double = 1.0,
+    ) {
+        val manga = manga ?: return
+        val chapter = getCurrentChapter()?.chapter ?: return
+        val page = state.value.currentChapter?.pages?.getOrNull(state.value.currentPage - 1) ?: return
+
+        val bookmark = PageBookmark(
+            mangaId = manga.id,
+            chapterId = chapter.id!!,
+            chapterUrl = chapter.url,
+            chapterName = chapter.name,
+            pageIndex = page.index,
+            scrollOffset = scrollOffset,
+            imageUrl = page.imageUrl.orEmpty(),
+            cropTop = cropTop,
+            cropBottom = cropBottom,
+            addedAt = System.currentTimeMillis(),
+        )
+
+        viewModelScope.launchNonCancellable {
+            val wasAdded = togglePageBookmark.await(bookmark)
+            mutableState.update { it.copy(isCurrentPageBookmarked = wasAdded) }
+        }
+    }
+
+    private fun checkCurrentPageBookmark(page: ReaderPage) {
+        val manga = manga ?: return
+        val chapter = page.chapter.chapter
+        viewModelScope.launchIO {
+            val existing = getPageBookmarks.awaitForManga(manga.id).any {
+                it.chapterId == chapter.id && it.pageIndex == page.index
+            }
+            mutableState.update { it.copy(isCurrentPageBookmarked = existing) }
+        }
+    }
+
+    /**
+     * Consume and clear the pending scroll offset (used for page bookmark scroll restoration).
+     * Returns the offset and clears it from state so it's only applied once.
+     */
+    fun consumePendingScrollOffset(): Double? {
+        val offset = state.value.pendingScrollOffset ?: return null
+        mutableState.update { it.copy(pendingScrollOffset = null) }
+        return offset
+    }
+    // KMK <--
 
     // SY -->
     fun toggleBookmark(chapterId: Long, bookmarked: Boolean) {
@@ -1473,6 +1544,10 @@ class ReaderViewModel @JvmOverloads constructor(
         val bookmarked: Boolean = false,
         val isLoadingAdjacentChapter: Boolean = false,
         val currentPage: Int = -1,
+        // KMK -->
+        val isCurrentPageBookmarked: Boolean = false,
+        val pendingScrollOffset: Double? = null,
+        // KMK <--
 
         /**
          * Viewer used to display the pages (pager, webtoon, ...).

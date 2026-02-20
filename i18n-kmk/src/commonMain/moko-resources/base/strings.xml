@@ -236,4 +236,17 @@
     <string name="pref_discord_show_download_button_summary">Displays a button to download the app</string>
     <string name="pref_discord_show_discord_button">Show Discord Button</string>
     <string name="pref_discord_show_discord_button_summary">Displays a button to join the Discord server</string>
+    <!-- Page bookmarks -->
+    <string name="action_bookmark_page">Bookmark page</string>
+    <string name="action_unbookmark_page">Remove page bookmark</string>
+    <string name="page_bookmarked">Page bookmarked</string>
+    <string name="page_bookmark_removed">Page bookmark removed</string>
+    <string name="page_bookmarks">Page bookmarks</string>
+    <string name="page_bookmarks_count">%d page bookmarks</string>
+    <string name="page_bookmark_chapter_page">Page %d</string>
+    <string name="page_bookmarks_empty">No page bookmarks yet</string>
+    <string name="page_bookmarks_empty_subtitle">Long-press a page while reading to bookmark it</string>
+    <string name="page_bookmark_delete">Delete bookmark</string>
+    <string name="page_bookmark_delete_confirm">Delete this page bookmark?</string>
+    <string name="page_bookmark_deleted">Bookmark deleted</string>
 </resources>
