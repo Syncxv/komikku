@@ -321,7 +321,7 @@ class WebtoonViewer(
             }
             // KMK -->
             // Apply scroll offset for page bookmark restoration
-            if (scrollOffset != null && scrollOffset > 0.0) {
+            if (scrollOffset != null && scrollOffset != 0.0) {
                 applyScrollOffsetWhenReady(position, scrollOffset)
             }
             // KMK <--
@@ -347,12 +347,13 @@ class WebtoonViewer(
         recycler.doOnLayout {
             recycler.post {
                 val holder = recycler.findViewHolderForAdapterPosition(position) ?: return@post
+                val page = adapter.items.getOrNull(position) as? ReaderPage ?: return@post
                 val itemView = holder.itemView
                 val initialHeight = itemView.height
 
-                // If the image is already loaded (height significantly larger than screen),
+                // If the image is already loaded (height is different from the placeholder height),
                 // the page was cached and decoded instantly — apply immediately
-                if (initialHeight > recycler.height * 1.5) {
+                if (initialHeight != recycler.height) {
                     val targetScrollY = (scrollOffset * initialHeight).toInt()
                     recycler.scrollBy(0, targetScrollY)
                     return@post
@@ -362,7 +363,7 @@ class WebtoonViewer(
                 val listener = object : ViewTreeObserver.OnGlobalLayoutListener {
                     override fun onGlobalLayout() {
                         val currentHeight = itemView.height
-                        if (currentHeight != initialHeight && currentHeight > recycler.height) {
+                        if (currentHeight != initialHeight) {
                             itemView.viewTreeObserver.removeOnGlobalLayoutListener(this)
                             // Re-scroll to the item's top first, since the height change
                             // may have shifted everything
@@ -376,10 +377,10 @@ class WebtoonViewer(
                 }
                 itemView.viewTreeObserver.addOnGlobalLayoutListener(listener)
 
-                // Safety: remove listener after 10 seconds to prevent leaks
+                // Safety: remove listener after 3 seconds to prevent leaks
                 recycler.postDelayed({
                     itemView.viewTreeObserver.removeOnGlobalLayoutListener(listener)
-                }, 10_000)
+                }, 3_000)
             }
         }
     }
@@ -533,7 +534,20 @@ class WebtoonViewer(
         val visibleTop = (-itemView.top).coerceAtLeast(0)
         val visibleBottom = (recyclerHeight - itemView.top).coerceAtMost(itemHeight)
 
-        val scrollOffset = visibleTop.toDouble() / itemHeight
+        // If the item is shorter than the recycler view, and we are at the bottom of the item,
+        // the visibleTop might be 0, but we want the scroll offset to reflect that we are at the bottom.
+        // We calculate the scroll offset based on how much of the item is above the top of the recycler.
+        // If the item is fully visible and pushed to the top, scrollOffset is 0.
+        // If the item is fully visible and pushed to the bottom, scrollOffset should be such that
+        // when restored, it aligns the bottom of the item with the bottom of the screen.
+        // However, the standard scroll restoration logic usually aligns the top.
+        // To fix the "bookmarking the end of a short page" issue, we need to ensure the scrollOffset
+        // accurately represents the position.
+
+        // The actual scroll offset should be the distance from the top of the item to the top of the viewport,
+        // divided by the item height.
+        val scrollOffset = (-itemView.top).toDouble() / itemHeight
+
         val cropTop = visibleTop.toDouble() / itemHeight
         val cropBottom = visibleBottom.toDouble() / itemHeight
 

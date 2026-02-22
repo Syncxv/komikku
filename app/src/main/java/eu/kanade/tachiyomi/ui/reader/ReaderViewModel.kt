@@ -495,7 +495,7 @@ class ReaderViewModel @JvmOverloads constructor(
                     // triggers setChapters -> moveToPage -> consumePendingScrollOffset on
                     // the main thread via withUIContext. If we set it after, the offset
                     // would not yet be available when moveToPage tries to consume it.
-                    if (scrollOffset != null && scrollOffset > 0.0) {
+                    if (scrollOffset != null && scrollOffset != 0.0) {
                         mutableState.update { it.copy(pendingScrollOffset = scrollOffset) }
                     }
                     // KMK <--
@@ -573,7 +573,7 @@ class ReaderViewModel @JvmOverloads constructor(
 
             if (parts.isNotEmpty()) {
                 val partCount = parts.size
-                if (partCount > 1 && originalScrollOffset != null && originalScrollOffset > 0.0) {
+                if (partCount > 1 && originalScrollOffset != null && originalScrollOffset != 0.0) {
                     // Calculate which part to open and the new scroll offset
                     val targetPartIndex = (originalScrollOffset * partCount).toInt().coerceIn(0, partCount - 1)
                     val splitScrollOffset = (originalScrollOffset * partCount) - targetPartIndex
