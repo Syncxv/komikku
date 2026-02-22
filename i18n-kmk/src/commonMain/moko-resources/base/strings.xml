@@ -249,4 +249,8 @@
     <string name="page_bookmark_delete">Delete bookmark</string>
     <string name="page_bookmark_delete_confirm">Delete this page bookmark?</string>
     <string name="page_bookmark_deleted">Bookmark deleted</string>
+    <string name="page_bookmark_open">Open</string>
+    <string name="page_bookmark_edit_note">Edit note</string>
+    <string name="page_bookmark_note_hint">Add a note…</string>
+    <string name="page_bookmark_added_on">Saved on %s</string>
 </resources>

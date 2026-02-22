@@ -17,10 +17,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.util.lang.launchNonCancellable
+import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.pagebookmarks.interactor.DeletePageBookmark
 import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
+import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkNote
 import tachiyomi.domain.pagebookmarks.model.PageBookmark
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -45,6 +47,7 @@ class PageBookmarksScreen(
                 openReaderAtBookmark(context, bookmark)
             },
             onDeleteBookmark = screenModel::deleteBookmark,
+            onUpdateNote = screenModel::updateNote,
             getThumbnailFile = screenModel::getThumbnailFile,
         )
     }
@@ -56,7 +59,6 @@ class PageBookmarksScreen(
             chapterId = bookmark.chapterId,
             page = bookmark.pageIndex,
         ).apply {
-            // Pass scroll offset for webtoon mode scroll restoration
             putExtra("scroll_offset", bookmark.scrollOffset)
         }
         context.startActivity(intent)
@@ -67,20 +69,24 @@ class PageBookmarksScreen(
         private val context: Context,
         private val getPageBookmarks: GetPageBookmarks = Injekt.get(),
         private val deletePageBookmark: DeletePageBookmark = Injekt.get(),
+        private val updatePageBookmarkNote: UpdatePageBookmarkNote = Injekt.get(),
         private val getManga: GetManga = Injekt.get(),
+        private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
     ) : StateScreenModel<State>(State()) {
 
         private val thumbnailProvider = PageBookmarkThumbnailProvider(context)
         private var manga: Manga? = null
 
         init {
-            // Load manga info
             screenModelScope.launch(Dispatchers.IO) {
                 manga = getManga.await(mangaId)
                 mutableState.update { it.copy(mangaTitle = manga?.title.orEmpty()) }
+                // Load chapter sort order (no filter so all chapters are included)
+                val chapters = getChaptersByMangaId.await(mangaId, applyFilter = false)
+                val orderMap = chapters.mapIndexed { index, chapter -> chapter.id to index }.toMap()
+                mutableState.update { it.copy(chapterIdToOrder = orderMap) }
             }
 
-            // Subscribe to bookmarks
             screenModelScope.launch {
                 getPageBookmarks.subscribeForManga(mangaId)
                     .collect { bookmarks ->
@@ -96,6 +102,12 @@ class PageBookmarksScreen(
             }
         }
 
+        fun updateNote(bookmarkId: Long, note: String) {
+            screenModelScope.launchNonCancellable {
+                updatePageBookmarkNote.await(bookmarkId, note)
+            }
+        }
+
         fun getThumbnailFile(bookmark: PageBookmark): File? {
             return thumbnailProvider.getThumbnailFile(bookmark, manga)
         }
@@ -106,5 +118,7 @@ class PageBookmarksScreen(
         val bookmarks: List<PageBookmark> = emptyList(),
         val mangaTitle: String = "",
         val isLoading: Boolean = true,
+        val chapterIdToOrder: Map<Long, Int> = emptyMap(),
     )
 }
+
