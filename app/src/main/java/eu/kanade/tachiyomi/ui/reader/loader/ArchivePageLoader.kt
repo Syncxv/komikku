@@ -86,7 +86,7 @@ internal class ArchivePageLoader(private val reader: ArchiveReader) : PageLoader
                     }
                 val imageBytes by lazy { runBlocking { imageBytesDeferred?.await() } }
                 // SY <--
-                ReaderPage(i).apply {
+                ReaderPage(i, url = entry.name).apply {
                     // SY -->
                     stream = { imageBytes?.copyOf()?.inputStream() ?: reader.getInputStream(entry.name)!! }
                     // SY <--

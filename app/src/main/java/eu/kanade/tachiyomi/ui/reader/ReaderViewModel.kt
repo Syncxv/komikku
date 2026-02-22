@@ -555,6 +555,36 @@ class ReaderViewModel @JvmOverloads constructor(
     ): ViewerChapters {
         loader.loadChapter(chapter /* SY --> */, page/* SY <-- */)
 
+        // Map original page and scroll offset to split page and split scroll offset
+        val pages = chapter.pages
+        if (pages != null && pages.isNotEmpty()) {
+            val originalIndex = chapter.requestedPage
+            val originalScrollOffset = state.value.pendingScrollOffset
+            
+            // Find all parts for the original index
+            val parts = pages.filter { p ->
+                val filename = p.uri?.lastPathSegment ?: p.url
+                if (filename.isBlank()) return@filter false
+                val baseName = filename.substringBeforeLast('.')
+                val mainNumber = baseName.split("__").firstOrNull() ?: baseName
+                mainNumber.trimStart('0').ifEmpty { "0" } == (originalIndex + 1).toString()
+            }
+            
+            if (parts.isNotEmpty()) {
+                val partCount = parts.size
+                if (partCount > 1 && originalScrollOffset != null && originalScrollOffset > 0.0) {
+                    // Calculate which part to open and the new scroll offset
+                    val targetPartIndex = (originalScrollOffset * partCount).toInt().coerceIn(0, partCount - 1)
+                    val splitScrollOffset = (originalScrollOffset * partCount) - targetPartIndex
+                    
+                    chapter.requestedPage = pages.indexOf(parts[targetPartIndex])
+                    mutableState.update { it.copy(pendingScrollOffset = splitScrollOffset) }
+                } else {
+                    chapter.requestedPage = pages.indexOf(parts.first())
+                }
+            }
+        }
+
         val chapterPos = chapterList.indexOf(chapter)
         val newChapters = ViewerChapters(
             chapter,
@@ -844,7 +874,8 @@ class ReaderViewModel @JvmOverloads constructor(
         chapterPageIndex = pageIndex
 
         if (!incognitoMode && page.status !is Page.State.Error) {
-            readerChapter.chapter.last_page_read = pageIndex
+            val originalInfo = getOriginalPageInfo(page as ReaderPage, 0.0, 0.0, 1.0)
+            readerChapter.chapter.last_page_read = originalInfo.index
 
             if (readerChapter.pages?.lastIndex == pageIndex ||
                 // SY -->
@@ -1006,6 +1037,70 @@ class ReaderViewModel @JvmOverloads constructor(
     }
 
     // KMK -->
+    private data class OriginalPageInfo(
+        val index: Int,
+        val scrollOffset: Double,
+        val cropTop: Double,
+        val cropBottom: Double,
+        val imageUrl: String
+    )
+
+    private fun getOriginalPageInfo(
+        page: ReaderPage,
+        scrollOffset: Double,
+        cropTop: Double,
+        cropBottom: Double
+    ): OriginalPageInfo {
+        val filename = page.uri?.lastPathSegment ?: page.url
+        if (filename.isBlank()) {
+            // Not a downloaded directory page, or not split
+            return OriginalPageInfo(page.index, scrollOffset, cropTop, cropBottom, page.imageUrl.orEmpty())
+        }
+        
+        // Check if it's a split image: e.g. "005__002.jpg"
+        val splitIndex = filename.indexOf("__")
+        if (splitIndex == -1) {
+            // Not split, but we still need to extract the original index from the filename
+            // e.g. "005.jpg" -> index 4
+            val baseName = filename.substringBeforeLast('.')
+            val originalNumber = baseName.toIntOrNull()
+            if (originalNumber != null) {
+                return OriginalPageInfo(originalNumber - 1, scrollOffset, cropTop, cropBottom, page.imageUrl.orEmpty())
+            }
+            return OriginalPageInfo(page.index, scrollOffset, cropTop, cropBottom, page.imageUrl.orEmpty())
+        }
+
+        val prefix = filename.substring(0, splitIndex)
+        val originalNumber = prefix.toIntOrNull() ?: return OriginalPageInfo(page.index, scrollOffset, cropTop, cropBottom, page.imageUrl.orEmpty())
+        val originalIndex = originalNumber - 1
+
+        // Find all parts with the same prefix
+        val allPages = state.value.currentChapter?.pages ?: return OriginalPageInfo(originalIndex, scrollOffset, cropTop, cropBottom, page.imageUrl.orEmpty())
+        val parts = allPages.filter { 
+            val pFilename = it.uri?.lastPathSegment ?: it.url
+            pFilename.startsWith("${prefix}__") 
+        }
+        
+        if (parts.isEmpty()) {
+            return OriginalPageInfo(originalIndex, scrollOffset, cropTop, cropBottom, page.imageUrl.orEmpty())
+        }
+
+        val partCount = parts.size
+        val currentPartIndex = parts.indexOf(page)
+        if (currentPartIndex == -1) {
+            return OriginalPageInfo(originalIndex, scrollOffset, cropTop, cropBottom, page.imageUrl.orEmpty())
+        }
+
+        // Calculate original scroll offset
+        val originalScrollOffset = (currentPartIndex + scrollOffset) / partCount
+        
+        // Calculate original crop top/bottom
+        val originalCropTop = (currentPartIndex + cropTop) / partCount
+        val originalCropBottom = (currentPartIndex + cropBottom) / partCount
+
+        return OriginalPageInfo(originalIndex, originalScrollOffset, originalCropTop, originalCropBottom, page.imageUrl.orEmpty())
+    }
+
     /**
      * Toggles a page bookmark for the currently active page.
      * Automatically captures the visible region info from the current viewer (webtoon mode).
@@ -1022,16 +1117,18 @@ class ReaderViewModel @JvmOverloads constructor(
         val cropTop = visibleInfo?.cropTop ?: 0.0
         val cropBottom = visibleInfo?.cropBottom ?: 1.0
 
+        val originalInfo = getOriginalPageInfo(page, scrollOffset, cropTop, cropBottom)
+
         val bookmark = PageBookmark(
             mangaId = manga.id,
             chapterId = chapter.id!!,
             chapterUrl = chapter.url,
             chapterName = chapter.name,
-            pageIndex = page.index,
-            scrollOffset = scrollOffset,
-            imageUrl = page.imageUrl.orEmpty(),
-            cropTop = cropTop,
-            cropBottom = cropBottom,
+            pageIndex = originalInfo.index,
+            scrollOffset = originalInfo.scrollOffset,
+            imageUrl = originalInfo.imageUrl,
+            cropTop = originalInfo.cropTop,
+            cropBottom = originalInfo.cropBottom,
             addedAt = System.currentTimeMillis(),
         )
 
@@ -1044,9 +1141,10 @@ class ReaderViewModel @JvmOverloads constructor(
     private fun checkCurrentPageBookmark(page: ReaderPage) {
         val manga = manga ?: return
         val chapter = page.chapter.chapter
+        val originalInfo = getOriginalPageInfo(page, 0.0, 0.0, 1.0)
         viewModelScope.launchIO {
             val existing = getPageBookmarks.awaitForManga(manga.id).any {
-                it.chapterId == chapter.id && it.pageIndex == page.index
+                it.chapterId == chapter.id && it.pageIndex == originalInfo.index
             }
             mutableState.update { it.copy(isCurrentPageBookmarked = existing) }
         }

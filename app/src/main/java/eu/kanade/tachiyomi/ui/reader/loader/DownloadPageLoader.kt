@@ -66,6 +66,7 @@ internal class DownloadPageLoader(
                 context.contentResolver.openInputStream(page.uri ?: Uri.EMPTY)!!
             }.apply {
                 status = Page.State.Ready
+                uri = page.uri
             }
         }
     }

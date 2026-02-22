@@ -47,9 +47,9 @@ class PageBookmarkThumbnailProvider(
         }
 
         // Try to generate from source image
-        val sourceImageFile = findSourceImage(bookmark, manga) ?: return null
+        val sourceImageInfo = findSourceImage(bookmark, manga) ?: return null
         return try {
-            generateThumbnail(sourceImageFile, bookmark, cachedThumb)
+            generateThumbnail(sourceImageInfo.file, bookmark, cachedThumb, sourceImageInfo.partCount, sourceImageInfo.targetPartIndex)
         } catch (e: Exception) {
             logcat { "Failed to generate thumbnail for bookmark ${bookmark.id}: ${e.message}" }
             null
@@ -60,12 +60,12 @@ class PageBookmarkThumbnailProvider(
      * Find the source image file for a bookmark.
      * Checks: 1) Chapter cache, 2) Download directory
      */
-    private fun findSourceImage(bookmark: PageBookmark, manga: Manga?): File? {
+    private fun findSourceImage(bookmark: PageBookmark, manga: Manga?): SourceImageInfo? {
         // 1. Try chapter cache (by image URL)
         if (bookmark.imageUrl.isNotBlank()) {
             val cacheFile = chapterCache.getImageFile(bookmark.imageUrl)
             if (cacheFile.exists()) {
-                return cacheFile
+                return SourceImageInfo(cacheFile, 1, 0)
             }
         }
 
@@ -85,19 +85,26 @@ class PageBookmarkThumbnailProvider(
                     // Format: %0Xd where X is max(3, digitCount of total pages)
                     val pageNumber = bookmark.pageIndex + 1
                     val allFiles = downloadDir.listFiles()
-                    val pageFile = allFiles
-                        ?.firstOrNull { name ->
-                            val fileName = name.name ?: return@firstOrNull false
+                    val pageFiles = allFiles
+                        ?.filter { name ->
+                            val fileName = name.name ?: return@filter false
                             // Match files starting with the page number (with any zero-padding)
                             val baseName = fileName.substringBeforeLast('.')
                             // Handle both "001" and "001__001" (split tall image) formats
                             val mainNumber = baseName.split("__").firstOrNull() ?: baseName
                             mainNumber.trimStart('0').ifEmpty { "0" } == pageNumber.toString()
                         }
-                    if (pageFile != null) {
+                        ?.sortedBy { it.name }
+                    
+                    if (!pageFiles.isNullOrEmpty()) {
+                        // If there are multiple split files, find the one that contains the cropTop
+                        val partCount = pageFiles.size
+                        val targetPartIndex = (bookmark.cropTop * partCount).toInt().coerceIn(0, partCount - 1)
+                        val pageFile = pageFiles[targetPartIndex]
+                        
                         val javaFile = pageFile.filePath?.let { File(it) }
                         if (javaFile?.exists() == true) {
-                            return javaFile
+                            return SourceImageInfo(javaFile, partCount, targetPartIndex)
                         }
                     }
                 }
@@ -109,22 +116,28 @@ class PageBookmarkThumbnailProvider(
         return null
     }
 
+    private data class SourceImageInfo(val file: File, val partCount: Int, val targetPartIndex: Int)
+
     /**
      * Generate a cropped thumbnail from the source image.
      * Uses BitmapRegionDecoder for memory-efficient partial decoding.
      * Adds a small padding around the crop region to give visual context.
      */
-    private fun generateThumbnail(sourceFile: File, bookmark: PageBookmark, outputFile: File): File? {
+    private fun generateThumbnail(sourceFile: File, bookmark: PageBookmark, outputFile: File, partCount: Int, targetPartIndex: Int): File? {
         val decoder = BitmapRegionDecoder.newInstance(sourceFile.inputStream(), false) ?: return null
         try {
             val fullH = decoder.height
             val fullW = decoder.width
 
+            // Calculate the crop region relative to this specific split part
+            val splitCropTop = (bookmark.cropTop * partCount) - targetPartIndex
+            val splitCropBottom = (bookmark.cropBottom * partCount) - targetPartIndex
+
             // Add ~10% padding above and below the visible region for context
-            val cropHeight = bookmark.cropBottom - bookmark.cropTop
+            val cropHeight = splitCropBottom - splitCropTop
             val padding = (cropHeight * 0.1).coerceAtMost(0.05) // max 5% of full image
-            val top = ((bookmark.cropTop - padding) * fullH).toInt().coerceIn(0, fullH)
-            val bottom = ((bookmark.cropBottom + padding) * fullH).toInt().coerceIn(top, fullH)
+            val top = ((splitCropTop - padding) * fullH).toInt().coerceIn(0, fullH)
+            val bottom = ((splitCropBottom + padding) * fullH).toInt().coerceIn(top, fullH)
 
             val region = Rect(0, top, fullW, bottom)
 
