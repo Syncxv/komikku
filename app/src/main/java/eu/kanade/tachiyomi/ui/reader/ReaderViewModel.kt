@@ -560,7 +560,7 @@ class ReaderViewModel @JvmOverloads constructor(
         if (pages != null && pages.isNotEmpty()) {
             val originalIndex = chapter.requestedPage
             val originalScrollOffset = state.value.pendingScrollOffset
-            
+
             // Find all parts for the original index
             val parts = pages.filter { p ->
                 val filename = p.uri?.lastPathSegment ?: p.url
@@ -569,14 +569,14 @@ class ReaderViewModel @JvmOverloads constructor(
                 val mainNumber = baseName.split("__").firstOrNull() ?: baseName
                 mainNumber.trimStart('0').ifEmpty { "0" } == (originalIndex + 1).toString()
             }
-            
+
             if (parts.isNotEmpty()) {
                 val partCount = parts.size
                 if (partCount > 1 && originalScrollOffset != null && originalScrollOffset > 0.0) {
                     // Calculate which part to open and the new scroll offset
                     val targetPartIndex = (originalScrollOffset * partCount).toInt().coerceIn(0, partCount - 1)
                     val splitScrollOffset = (originalScrollOffset * partCount) - targetPartIndex
-                    
+
                     chapter.requestedPage = pages.indexOf(parts[targetPartIndex])
                     mutableState.update { it.copy(pendingScrollOffset = splitScrollOffset) }
                 } else {
@@ -1056,7 +1056,7 @@ class ReaderViewModel @JvmOverloads constructor(
             // Not a downloaded directory page, or not split
             return OriginalPageInfo(page.index, scrollOffset, cropTop, cropBottom, page.imageUrl.orEmpty())
         }
-        
+
         // Check if it's a split image: e.g. "005__002.jpg"
         val splitIndex = filename.indexOf("__")
         if (splitIndex == -1) {
@@ -1076,11 +1076,11 @@ class ReaderViewModel @JvmOverloads constructor(
 
         // Find all parts with the same prefix
         val allPages = state.value.currentChapter?.pages ?: return OriginalPageInfo(originalIndex, scrollOffset, cropTop, cropBottom, page.imageUrl.orEmpty())
-        val parts = allPages.filter { 
+        val parts = allPages.filter {
             val pFilename = it.uri?.lastPathSegment ?: it.url
-            pFilename.startsWith("${prefix}__") 
+            pFilename.startsWith("${prefix}__")
         }
-        
+
         if (parts.isEmpty()) {
             return OriginalPageInfo(originalIndex, scrollOffset, cropTop, cropBottom, page.imageUrl.orEmpty())
         }
@@ -1093,7 +1093,7 @@ class ReaderViewModel @JvmOverloads constructor(
 
         // Calculate original scroll offset
         val originalScrollOffset = (currentPartIndex + scrollOffset) / partCount
-        
+
         // Calculate original crop top/bottom
         val originalCropTop = (currentPartIndex + cropTop) / partCount
         val originalCropBottom = (currentPartIndex + cropBottom) / partCount

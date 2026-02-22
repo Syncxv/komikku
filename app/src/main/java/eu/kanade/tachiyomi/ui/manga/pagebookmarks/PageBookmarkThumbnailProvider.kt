@@ -8,6 +8,9 @@ import android.graphics.Rect
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.DownloadProvider
+import eu.kanade.tachiyomi.util.lang.compareToCaseInsensitiveNaturalOrder
+import mihon.core.archive.archiveReader
+import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.pagebookmarks.model.PageBookmark
@@ -53,6 +56,10 @@ class PageBookmarkThumbnailProvider(
         } catch (e: Exception) {
             logcat { "Failed to generate thumbnail for bookmark ${bookmark.id}: ${e.message}" }
             null
+        } finally {
+            if (sourceImageInfo.isTemp) {
+                sourceImageInfo.file.delete()
+            }
         }
     }
 
@@ -65,7 +72,7 @@ class PageBookmarkThumbnailProvider(
         if (bookmark.imageUrl.isNotBlank()) {
             val cacheFile = chapterCache.getImageFile(bookmark.imageUrl)
             if (cacheFile.exists()) {
-                return SourceImageInfo(cacheFile, 1, 0)
+                return SourceImageInfo(cacheFile, 1, 0, isTemp = false)
             }
         }
 
@@ -77,34 +84,71 @@ class PageBookmarkThumbnailProvider(
                     chapterName = bookmark.chapterName,
                     chapterScanlator = null,
                     chapterUrl = bookmark.chapterUrl,
-                    mangaTitle = manga.title,
+                    mangaTitle = manga.ogTitle,
                     source = source,
                 )
                 if (downloadDir != null) {
-                    // Download files are named by 1-based page number: 001.jpg, 002.png, etc.
-                    // Format: %0Xd where X is max(3, digitCount of total pages)
                     val pageNumber = bookmark.pageIndex + 1
-                    val allFiles = downloadDir.listFiles()
-                    val pageFiles = allFiles
-                        ?.filter { name ->
-                            val fileName = name.name ?: return@filter false
-                            // Match files starting with the page number (with any zero-padding)
+
+                    if (downloadDir.isFile) {
+                        // Handle archive downloads (.cbz, .zip)
+                        val archiveReader = downloadDir.archiveReader(context)
+                        val entries = archiveReader.useEntries { entries ->
+                            entries
+                                .filter { it.isFile && ImageUtil.isImage(it.name) { archiveReader.getInputStream(it.name)!! } }
+                                .sortedWith { f1, f2 -> f1.name.compareToCaseInsensitiveNaturalOrder(f2.name) }
+                                .toList()
+                        }
+
+                        val pageEntries = entries.filter { entry ->
+                            val fileName = entry.name.substringAfterLast('/')
                             val baseName = fileName.substringBeforeLast('.')
-                            // Handle both "001" and "001__001" (split tall image) formats
                             val mainNumber = baseName.split("__").firstOrNull() ?: baseName
                             mainNumber.trimStart('0').ifEmpty { "0" } == pageNumber.toString()
                         }
-                        ?.sortedBy { it.name }
-                    
-                    if (!pageFiles.isNullOrEmpty()) {
-                        // If there are multiple split files, find the one that contains the cropTop
-                        val partCount = pageFiles.size
-                        val targetPartIndex = (bookmark.cropTop * partCount).toInt().coerceIn(0, partCount - 1)
-                        val pageFile = pageFiles[targetPartIndex]
-                        
-                        val javaFile = pageFile.filePath?.let { File(it) }
-                        if (javaFile?.exists() == true) {
-                            return SourceImageInfo(javaFile, partCount, targetPartIndex)
+
+                        if (pageEntries.isNotEmpty()) {
+                            val partCount = pageEntries.size
+                            val targetPartIndex = (bookmark.cropTop * partCount).toInt().coerceIn(0, partCount - 1)
+                            val targetEntry = pageEntries[targetPartIndex]
+
+                            // Extract the specific image to a temporary file
+                            val tmpFile = File(context.cacheDir, "bookmark_thumb_tmp_${bookmark.id}_${System.currentTimeMillis()}")
+                            tmpFile.outputStream().use { output ->
+                                archiveReader.getInputStream(targetEntry.name)?.use { input ->
+                                    input.copyTo(output)
+                                }
+                            }
+                            archiveReader.close()
+                            return SourceImageInfo(tmpFile, partCount, targetPartIndex, isTemp = true)
+                        }
+                        archiveReader.close()
+                    } else {
+                        // Handle directory downloads
+                        // Download files are named by 1-based page number: 001.jpg, 002.png, etc.
+                        // Format: %0Xd where X is max(3, digitCount of total pages)
+                        val allFiles = downloadDir.listFiles()
+                        val pageFiles = allFiles
+                            ?.filter { name ->
+                                val fileName = name.name ?: return@filter false
+                                // Match files starting with the page number (with any zero-padding)
+                                val baseName = fileName.substringBeforeLast('.')
+                                // Handle both "001" and "001__001" (split tall image) formats
+                                val mainNumber = baseName.split("__").firstOrNull() ?: baseName
+                                mainNumber.trimStart('0').ifEmpty { "0" } == pageNumber.toString()
+                            }
+                            ?.sortedBy { it.name }
+
+                        if (!pageFiles.isNullOrEmpty()) {
+                            // If there are multiple split files, find the one that contains the cropTop
+                            val partCount = pageFiles.size
+                            val targetPartIndex = (bookmark.cropTop * partCount).toInt().coerceIn(0, partCount - 1)
+                            val pageFile = pageFiles[targetPartIndex]
+
+                            val javaFile = pageFile.filePath?.let { File(it) }
+                            if (javaFile?.exists() == true) {
+                                return SourceImageInfo(javaFile, partCount, targetPartIndex, isTemp = false)
+                            }
                         }
                     }
                 }
@@ -116,7 +160,7 @@ class PageBookmarkThumbnailProvider(
         return null
     }
 
-    private data class SourceImageInfo(val file: File, val partCount: Int, val targetPartIndex: Int)
+    private data class SourceImageInfo(val file: File, val partCount: Int, val targetPartIndex: Int, val isTemp: Boolean)
 
     /**
      * Generate a cropped thumbnail from the source image.
