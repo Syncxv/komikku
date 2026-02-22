@@ -6,6 +6,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewTreeObserver
 import android.view.animation.LinearInterpolator
 import androidx.annotation.ColorInt
 import androidx.core.app.ActivityCompat
@@ -331,31 +332,55 @@ class WebtoonViewer(
 
     // KMK -->
     /**
-     * Repeatedly checks for the page view at [position] to have its image loaded (height > minimum).
-     * Once ready, applies the scroll offset. Uses a polling approach since page image loading
-     * is async and doOnLayout fires before the image is decoded.
+     * Waits for the page image at [position] to finish loading, then applies the scroll offset.
+     *
+     * The problem: when moveToPage is called, the page view initially has the height of the
+     * progress/loading placeholder (= screen height). The actual image is loaded asynchronously
+     * and causes the view height to change dramatically (e.g., from 2400px to 10000px).
+     * If we apply the offset against the placeholder height, we undershoot significantly.
+     *
+     * Solution: listen for the item view's height to change from its initial value, which
+     * indicates the image has been decoded and the view has resized. Then re-position and
+     * apply the offset against the final height.
      */
     private fun applyScrollOffsetWhenReady(position: Int, scrollOffset: Double) {
-        val minPageHeight = recycler.height // image should be at least screen height when loaded
-        var attempts = 0
-        val maxAttempts = 50 // ~2.5 seconds max wait
-
-        fun tryApplyOffset() {
-            val holder = recycler.findViewHolderForAdapterPosition(position)
-            val itemHeight = holder?.itemView?.height ?: 0
-            if (itemHeight >= minPageHeight) {
-                // Page image is loaded, apply the offset
-                val targetScrollY = (scrollOffset * itemHeight).toInt()
-                recycler.scrollBy(0, targetScrollY)
-            } else if (attempts < maxAttempts) {
-                attempts++
-                recycler.postDelayed({ tryApplyOffset() }, 50)
-            }
-        }
-
-        // Start after initial layout
         recycler.doOnLayout {
-            recycler.post { tryApplyOffset() }
+            recycler.post {
+                val holder = recycler.findViewHolderForAdapterPosition(position) ?: return@post
+                val itemView = holder.itemView
+                val initialHeight = itemView.height
+
+                // If the image is already loaded (height significantly larger than screen),
+                // the page was cached and decoded instantly — apply immediately
+                if (initialHeight > recycler.height * 1.5) {
+                    val targetScrollY = (scrollOffset * initialHeight).toInt()
+                    recycler.scrollBy(0, targetScrollY)
+                    return@post
+                }
+
+                // Otherwise, wait for the view height to change (image loading completes)
+                val listener = object : ViewTreeObserver.OnGlobalLayoutListener {
+                    override fun onGlobalLayout() {
+                        val currentHeight = itemView.height
+                        if (currentHeight != initialHeight && currentHeight > recycler.height) {
+                            itemView.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                            // Re-scroll to the item's top first, since the height change
+                            // may have shifted everything
+                            layoutManager.scrollToPositionWithOffset(position, 0)
+                            recycler.post {
+                                val targetScrollY = (scrollOffset * currentHeight).toInt()
+                                recycler.scrollBy(0, targetScrollY)
+                            }
+                        }
+                    }
+                }
+                itemView.viewTreeObserver.addOnGlobalLayoutListener(listener)
+
+                // Safety: remove listener after 10 seconds to prevent leaks
+                recycler.postDelayed({
+                    itemView.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+                }, 10_000)
+            }
         }
     }
     // KMK <--
