@@ -543,6 +543,35 @@ class WebtoonViewer(
             cropBottom = cropBottom.coerceIn(0.0, 1.0),
         )
     }
+
+    /**
+     * Captures a screenshot of the currently visible portion of the webtoon viewer.
+     * This is useful for creating thumbnails that span across multiple pages.
+     */
+    suspend fun getVisibleScreenshot(): android.graphics.Bitmap? = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+        if (recycler.width <= 0 || recycler.height <= 0) {
+            continuation.resume(null) {}
+            return@suspendCancellableCoroutine
+        }
+        val bitmap = android.graphics.Bitmap.createBitmap(recycler.width, recycler.height, android.graphics.Bitmap.Config.ARGB_8888)
+        val location = IntArray(2)
+        recycler.getLocationInWindow(location)
+        val rect = android.graphics.Rect(location[0], location[1], location[0] + recycler.width, location[1] + recycler.height)
+
+        try {
+            android.view.PixelCopy.request(activity.window, rect, bitmap, { copyResult ->
+                if (copyResult == android.view.PixelCopy.SUCCESS) {
+                    continuation.resume(bitmap) {}
+                } else {
+                    bitmap.recycle()
+                    continuation.resume(null) {}
+                }
+            }, android.os.Handler(android.os.Looper.getMainLooper()))
+        } catch (e: Exception) {
+            bitmap.recycle()
+            continuation.resume(null) {}
+        }
+    }
     // KMK <--
 
     /**

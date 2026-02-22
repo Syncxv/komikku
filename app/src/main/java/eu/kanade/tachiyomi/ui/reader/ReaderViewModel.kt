@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader
 
+import logcat.logcat
 import android.app.Application
 import android.net.Uri
 import androidx.annotation.ColorInt
@@ -1132,8 +1133,33 @@ class ReaderViewModel @JvmOverloads constructor(
             addedAt = System.currentTimeMillis(),
         )
 
+        // Capture a screenshot of the current view to use as the thumbnail
+        // This ensures that even if a panel spans across multiple pages, the thumbnail will show exactly what the user sees
         viewModelScope.launchNonCancellable {
+            val screenshot = (viewer as? WebtoonViewer)?.getVisibleScreenshot()
             val wasAdded = togglePageBookmark.await(bookmark)
+            if (wasAdded && screenshot != null) {
+                // Save the screenshot to the thumbnail cache
+                try {
+                    // We need the actual bookmark ID from the database, so we fetch it
+                    val savedBookmark = getPageBookmarks.awaitForManga(manga.id).find {
+                        it.chapterId == chapter.id && it.pageIndex == originalInfo.index
+                    }
+                    if (savedBookmark != null) {
+                        val thumbDir = java.io.File(Injekt.get<android.app.Application>().filesDir, "page_bookmark_thumbs").apply { mkdirs() }
+                        val thumbFile = java.io.File(thumbDir, "${savedBookmark.id}.webp")
+                        java.io.FileOutputStream(thumbFile).use { fos ->
+                            screenshot.compress(android.graphics.Bitmap.CompressFormat.WEBP_LOSSY, 80, fos)
+                        }
+                    }
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR, e) { "Failed to save bookmark screenshot" }
+                } finally {
+                    screenshot.recycle()
+                }
+            } else {
+                screenshot?.recycle()
+            }
             mutableState.update { it.copy(isCurrentPageBookmarked = wasAdded) }
         }
     }

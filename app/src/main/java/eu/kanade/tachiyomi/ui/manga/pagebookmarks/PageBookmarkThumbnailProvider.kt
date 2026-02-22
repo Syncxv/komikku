@@ -49,7 +49,8 @@ class PageBookmarkThumbnailProvider(
             return cachedThumb
         }
 
-        // Try to generate from source image
+        // If the thumbnail doesn't exist, it might be because it was a screenshot that failed to save,
+        // or it's an older bookmark. We can try to generate it from the source image as a fallback.
         val sourceImageInfo = findSourceImage(bookmark, manga) ?: return null
         return try {
             generateThumbnail(sourceImageInfo.file, bookmark, cachedThumb, sourceImageInfo.partCount, sourceImageInfo.targetPartIndex)
@@ -180,8 +181,19 @@ class PageBookmarkThumbnailProvider(
             // Add ~10% padding above and below the visible region for context
             val cropHeight = splitCropBottom - splitCropTop
             val padding = (cropHeight * 0.1).coerceAtMost(0.05) // max 5% of full image
-            val top = ((splitCropTop - padding) * fullH).toInt().coerceIn(0, fullH)
-            val bottom = ((splitCropBottom + padding) * fullH).toInt().coerceIn(top, fullH)
+            var top = ((splitCropTop - padding) * fullH).toInt().coerceIn(0, fullH)
+            var bottom = ((splitCropBottom + padding) * fullH).toInt().coerceIn(top, fullH)
+
+            // Enforce a minimum height for the crop region so it doesn't look like a thin sliver.
+            // Target a roughly 3:4 aspect ratio (portrait) or at least the full height if the image is short.
+            val minHeight = (fullW * 0.75).toInt().coerceAtMost(fullH)
+            if (bottom - top < minHeight) {
+                val center = (top + bottom) / 2
+                top = (center - minHeight / 2).coerceAtLeast(0)
+                bottom = (top + minHeight).coerceAtMost(fullH)
+                // Adjust top again in case bottom was clamped to fullH
+                top = (bottom - minHeight).coerceAtLeast(0)
+            }
 
             val region = Rect(0, top, fullW, bottom)
 
