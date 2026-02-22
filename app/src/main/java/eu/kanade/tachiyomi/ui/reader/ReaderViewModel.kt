@@ -1138,6 +1138,17 @@ class ReaderViewModel @JvmOverloads constructor(
         viewModelScope.launchNonCancellable {
             val screenshot = (viewer as? WebtoonViewer)?.getVisibleScreenshot()
             val wasAdded = togglePageBookmark.await(bookmark)
+            // When a page bookmark is added, also bookmark the chapter if not already bookmarked
+            if (wasAdded && !chapter.bookmark) {
+                chapter.bookmark = true
+                updateChapter.await(
+                    ChapterUpdate(
+                        id = chapter.id!!,
+                        bookmark = true,
+                    ),
+                )
+                mutableState.update { it.copy(bookmarked = true) }
+            }
             if (wasAdded && screenshot != null) {
                 // Save the screenshot to the thumbnail cache
                 try {
