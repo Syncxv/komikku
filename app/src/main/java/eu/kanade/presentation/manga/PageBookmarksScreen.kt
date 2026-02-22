@@ -168,7 +168,7 @@ private fun PageBookmarkItem(
                 bookmark = bookmark,
                 getThumbnailFile = getThumbnailFile,
                 modifier = Modifier
-                    .size(width = 56.dp, height = 80.dp)
+                    .size(width = 80.dp, height = 120.dp)
                     .clip(RoundedCornerShape(4.dp)),
             )
 
@@ -232,7 +232,7 @@ private fun BookmarkThumbnail(
                 .build(),
             contentDescription = null,
             modifier = modifier,
-            contentScale = ContentScale.Crop,
+            contentScale = ContentScale.FillWidth,
         )
     } else {
         // Placeholder when image is not available

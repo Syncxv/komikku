@@ -321,22 +321,44 @@ class WebtoonViewer(
             // KMK -->
             // Apply scroll offset for page bookmark restoration
             if (scrollOffset != null && scrollOffset > 0.0) {
-                recycler.doOnLayout {
-                    recycler.post {
-                        val holder = recycler.findViewHolderForAdapterPosition(position)
-                        if (holder != null) {
-                            val itemHeight = holder.itemView.height
-                            val targetScrollY = (scrollOffset * itemHeight).toInt()
-                            recycler.scrollBy(0, targetScrollY)
-                        }
-                    }
-                }
+                applyScrollOffsetWhenReady(position, scrollOffset)
             }
             // KMK <--
         } else {
             logcat { "Page $page not found in adapter" }
         }
     }
+
+    // KMK -->
+    /**
+     * Repeatedly checks for the page view at [position] to have its image loaded (height > minimum).
+     * Once ready, applies the scroll offset. Uses a polling approach since page image loading
+     * is async and doOnLayout fires before the image is decoded.
+     */
+    private fun applyScrollOffsetWhenReady(position: Int, scrollOffset: Double) {
+        val minPageHeight = recycler.height // image should be at least screen height when loaded
+        var attempts = 0
+        val maxAttempts = 50 // ~2.5 seconds max wait
+
+        fun tryApplyOffset() {
+            val holder = recycler.findViewHolderForAdapterPosition(position)
+            val itemHeight = holder?.itemView?.height ?: 0
+            if (itemHeight >= minPageHeight) {
+                // Page image is loaded, apply the offset
+                val targetScrollY = (scrollOffset * itemHeight).toInt()
+                recycler.scrollBy(0, targetScrollY)
+            } else if (attempts < maxAttempts) {
+                attempts++
+                recycler.postDelayed({ tryApplyOffset() }, 50)
+            }
+        }
+
+        // Start after initial layout
+        recycler.doOnLayout {
+            recycler.post { tryApplyOffset() }
+        }
+    }
+    // KMK <--
 
     fun onScrolled(pos: Int? = null) {
         val position = pos ?: layoutManager.findLastEndVisibleItemPosition()
@@ -452,6 +474,51 @@ class WebtoonViewer(
     override fun handleGenericMotionEvent(event: MotionEvent): Boolean {
         return false
     }
+
+    // KMK -->
+    /**
+     * Data class representing the visible region of the current page in the webtoon viewer.
+     * All values are normalized floats (0.0 to 1.0) relative to the page item height.
+     */
+    data class VisiblePageInfo(
+        /** How far down the page the visible region starts (0.0 = top) */
+        val scrollOffset: Double,
+        /** Normalized top of the visible region for cropping */
+        val cropTop: Double,
+        /** Normalized bottom of the visible region for cropping */
+        val cropBottom: Double,
+    )
+
+    /**
+     * Computes the visible region of the currently active page item.
+     * Returns null if the current item is not a page or the view can't be found.
+     */
+    fun getVisiblePageInfo(): VisiblePageInfo? {
+        val page = currentPage as? ReaderPage ?: return null
+        val position = adapter.items.indexOf(page)
+        if (position == -1) return null
+
+        val holder = recycler.findViewHolderForAdapterPosition(position) ?: return null
+        val itemView = holder.itemView
+        val itemHeight = itemView.height
+        if (itemHeight <= 0) return null
+
+        // itemView.top is negative when scrolled past the top of the item
+        val recyclerHeight = recycler.height
+        val visibleTop = (-itemView.top).coerceAtLeast(0)
+        val visibleBottom = (recyclerHeight - itemView.top).coerceAtMost(itemHeight)
+
+        val scrollOffset = visibleTop.toDouble() / itemHeight
+        val cropTop = visibleTop.toDouble() / itemHeight
+        val cropBottom = visibleBottom.toDouble() / itemHeight
+
+        return VisiblePageInfo(
+            scrollOffset = scrollOffset,
+            cropTop = cropTop.coerceIn(0.0, 1.0),
+            cropBottom = cropBottom.coerceIn(0.0, 1.0),
+        )
+    }
+    // KMK <--
 
     /**
      * Notifies adapter of changes around the current page to trigger a relayout in the recycler.

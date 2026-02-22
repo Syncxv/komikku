@@ -44,6 +44,7 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import eu.kanade.tachiyomi.ui.reader.viewer.Viewer
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerViewer
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.R2LPagerViewer
+import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonViewer
 import eu.kanade.tachiyomi.util.chapter.filterDownloaded
 import eu.kanade.tachiyomi.util.chapter.removeDuplicates
 import eu.kanade.tachiyomi.util.editCover
@@ -488,6 +489,16 @@ class ReaderViewModel @JvmOverloads constructor(
                         // SY <--
                     )
 
+                    // KMK -->
+                    // Set pending scroll offset BEFORE loadChapter, because loadChapter
+                    // triggers setChapters -> moveToPage -> consumePendingScrollOffset on
+                    // the main thread via withUIContext. If we set it after, the offset
+                    // would not yet be available when moveToPage tries to consume it.
+                    if (scrollOffset != null && scrollOffset > 0.0) {
+                        mutableState.update { it.copy(pendingScrollOffset = scrollOffset) }
+                    }
+                    // KMK <--
+
                     loadChapter(
                         loader!!,
                         chapterList.first { chapterId == it.chapter.id },
@@ -495,11 +506,6 @@ class ReaderViewModel @JvmOverloads constructor(
                         page,
                         // SY <--
                     )
-                    // KMK -->
-                    if (scrollOffset != null && scrollOffset > 0.0) {
-                        mutableState.update { it.copy(pendingScrollOffset = scrollOffset) }
-                    }
-                    // KMK <--
                     Result.success(true)
                 } else {
                     // Unlikely but okay
@@ -1002,16 +1008,19 @@ class ReaderViewModel @JvmOverloads constructor(
     // KMK -->
     /**
      * Toggles a page bookmark for the currently active page.
-     * Captures page index, image URL, and for webtoon mode, the visible crop region.
+     * Automatically captures the visible region info from the current viewer (webtoon mode).
      */
-    fun togglePageBookmark(
-        scrollOffset: Double = 0.0,
-        cropTop: Double = 0.0,
-        cropBottom: Double = 1.0,
-    ) {
+    fun togglePageBookmark() {
         val manga = manga ?: return
         val chapter = getCurrentChapter()?.chapter ?: return
         val page = state.value.currentChapter?.pages?.getOrNull(state.value.currentPage - 1) ?: return
+
+        // Auto-capture visible region from webtoon viewer
+        val viewer = state.value.viewer
+        val visibleInfo = (viewer as? WebtoonViewer)?.getVisiblePageInfo()
+        val scrollOffset = visibleInfo?.scrollOffset ?: 0.0
+        val cropTop = visibleInfo?.cropTop ?: 0.0
+        val cropBottom = visibleInfo?.cropBottom ?: 1.0
 
         val bookmark = PageBookmark(
             mangaId = manga.id,

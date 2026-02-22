@@ -81,11 +81,19 @@ class PageBookmarkThumbnailProvider(
                     source = source,
                 )
                 if (downloadDir != null) {
-                    // Page files are typically named by index: 001.jpg, 002.png, etc.
-                    val pageFiles = downloadDir.listFiles()
-                        ?.filter { it.name?.matches(Regex("^\\d+\\..*")) == true }
-                        ?.sortedBy { it.name }
-                    val pageFile = pageFiles?.getOrNull(bookmark.pageIndex)
+                    // Download files are named by 1-based page number: 001.jpg, 002.png, etc.
+                    // Format: %0Xd where X is max(3, digitCount of total pages)
+                    val pageNumber = bookmark.pageIndex + 1
+                    val allFiles = downloadDir.listFiles()
+                    val pageFile = allFiles
+                        ?.firstOrNull { name ->
+                            val fileName = name.name ?: return@firstOrNull false
+                            // Match files starting with the page number (with any zero-padding)
+                            val baseName = fileName.substringBeforeLast('.')
+                            // Handle both "001" and "001__001" (split tall image) formats
+                            val mainNumber = baseName.split("__").firstOrNull() ?: baseName
+                            mainNumber.trimStart('0').ifEmpty { "0" } == pageNumber.toString()
+                        }
                     if (pageFile != null) {
                         val javaFile = pageFile.filePath?.let { File(it) }
                         if (javaFile?.exists() == true) {
@@ -104,6 +112,7 @@ class PageBookmarkThumbnailProvider(
     /**
      * Generate a cropped thumbnail from the source image.
      * Uses BitmapRegionDecoder for memory-efficient partial decoding.
+     * Adds a small padding around the crop region to give visual context.
      */
     private fun generateThumbnail(sourceFile: File, bookmark: PageBookmark, outputFile: File): File? {
         val decoder = BitmapRegionDecoder.newInstance(sourceFile.inputStream(), false) ?: return null
@@ -111,15 +120,17 @@ class PageBookmarkThumbnailProvider(
             val fullH = decoder.height
             val fullW = decoder.width
 
-            val top = (bookmark.cropTop * fullH).toInt().coerceIn(0, fullH)
-            val bottom = (bookmark.cropBottom * fullH).toInt().coerceIn(top, fullH)
+            // Add ~10% padding above and below the visible region for context
+            val cropHeight = bookmark.cropBottom - bookmark.cropTop
+            val padding = (cropHeight * 0.1).coerceAtMost(0.05) // max 5% of full image
+            val top = ((bookmark.cropTop - padding) * fullH).toInt().coerceIn(0, fullH)
+            val bottom = ((bookmark.cropBottom + padding) * fullH).toInt().coerceIn(top, fullH)
 
-            // If crop covers the full image, just downsample the whole thing
             val region = Rect(0, top, fullW, bottom)
 
             val options = BitmapFactory.Options().apply {
-                // Calculate sample size to keep thumbnail reasonable (~300px wide)
-                inSampleSize = calculateSampleSize(fullW, bottom - top, 300, 400)
+                // Calculate sample size to keep thumbnail reasonable (~400px wide)
+                inSampleSize = calculateSampleSize(fullW, bottom - top, 400, 600)
             }
 
             val bitmap = decoder.decodeRegion(region, options) ?: return null
