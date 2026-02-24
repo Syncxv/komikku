@@ -1172,6 +1172,9 @@ class ReaderViewModel @JvmOverloads constructor(
                 screenshot?.recycle()
             }
             mutableState.update { it.copy(isCurrentPageBookmarked = wasAdded) }
+            if (wasAdded) {
+                eventChannel.send(Event.PageBookmarkCreated)
+            }
         }
     }
 
@@ -1763,5 +1766,6 @@ class ReaderViewModel @JvmOverloads constructor(
             // SY <--
         ) : Event
         data class CopyImage(val uri: Uri) : Event
+        data object PageBookmarkCreated : Event
     }
 }

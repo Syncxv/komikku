@@ -312,6 +312,9 @@ class ReaderActivity : BaseActivity() {
                     is ReaderViewModel.Event.SetCoverResult -> {
                         onSetAsCoverResult(event.result)
                     }
+                    ReaderViewModel.Event.PageBookmarkCreated -> {
+                        toast(KMR.strings.page_bookmarked)
+                    }
                 }
             }
             .launchIn(lifecycleScope)
