@@ -560,30 +560,78 @@ class WebtoonViewer(
 
     /**
      * Captures a screenshot of the currently visible portion of the webtoon viewer.
-     * This is useful for creating thumbnails that span across multiple pages.
+     * Uses PixelCopy for accurate hardware-accelerated rendering (SubsamplingScaleImageView),
+     * but temporarily hides UI overlays (toolbar, page indicators, etc.) so only the manga
+     * content is captured. This preserves cross-page panels since it captures exactly what
+     * the user sees.
      */
-    suspend fun getVisibleScreenshot(): android.graphics.Bitmap? = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
-        if (recycler.width <= 0 || recycler.height <= 0) {
-            continuation.resume(null) {}
-            return@suspendCancellableCoroutine
-        }
-        val bitmap = android.graphics.Bitmap.createBitmap(recycler.width, recycler.height, android.graphics.Bitmap.Config.ARGB_8888)
-        val location = IntArray(2)
-        recycler.getLocationInWindow(location)
-        val rect = android.graphics.Rect(location[0], location[1], location[0] + recycler.width, location[1] + recycler.height)
+    suspend fun getVisibleScreenshot(): android.graphics.Bitmap? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+        if (frame.width <= 0 || frame.height <= 0) return@withContext null
+
+        // Hide UI overlays so they don't appear in the screenshot
+        val composeOverlay = activity.findViewById<android.view.View>(eu.kanade.tachiyomi.R.id.compose_overlay)
+        val navigationOverlay = activity.findViewById<android.view.View>(eu.kanade.tachiyomi.R.id.navigation_overlay)
+        val prevComposeVis = composeOverlay?.visibility
+        val prevNavVis = navigationOverlay?.visibility
+        composeOverlay?.visibility = android.view.View.INVISIBLE
+        navigationOverlay?.visibility = android.view.View.INVISIBLE
 
         try {
-            android.view.PixelCopy.request(activity.window, rect, bitmap, { copyResult ->
-                if (copyResult == android.view.PixelCopy.SUCCESS) {
-                    continuation.resume(bitmap) {}
-                } else {
+            // Wait one frame so the overlays are actually hidden before capture
+            kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+                frame.post {
+                    continuation.resume(Unit) {}
+                }
+            }
+
+            kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+                // Use the frame (fixed viewport) rather than the recycler, so zoom/pan
+                // transforms are captured exactly as the user sees them
+                val bitmap = android.graphics.Bitmap.createBitmap(
+                    frame.width,
+                    frame.height,
+                    android.graphics.Bitmap.Config.ARGB_8888,
+                )
+                val location = IntArray(2)
+                frame.getLocationInWindow(location)
+                val rect = android.graphics.Rect(
+                    location[0],
+                    location[1],
+                    location[0] + frame.width,
+                    location[1] + frame.height,
+                )
+
+                try {
+                    android.view.PixelCopy.request(
+                        activity.window,
+                        rect,
+                        bitmap,
+                        { copyResult ->
+                            // Restore overlays
+                            composeOverlay?.visibility = prevComposeVis ?: android.view.View.VISIBLE
+                            navigationOverlay?.visibility = prevNavVis ?: android.view.View.GONE
+
+                            if (copyResult == android.view.PixelCopy.SUCCESS) {
+                                continuation.resume(bitmap) {}
+                            } else {
+                                bitmap.recycle()
+                                continuation.resume(null) {}
+                            }
+                        },
+                        android.os.Handler(android.os.Looper.getMainLooper()),
+                    )
+                } catch (e: Exception) {
                     bitmap.recycle()
+                    composeOverlay?.visibility = prevComposeVis ?: android.view.View.VISIBLE
+                    navigationOverlay?.visibility = prevNavVis ?: android.view.View.GONE
                     continuation.resume(null) {}
                 }
-            }, android.os.Handler(android.os.Looper.getMainLooper()))
+            }
         } catch (e: Exception) {
-            bitmap.recycle()
-            continuation.resume(null) {}
+            // Restore overlays on any unexpected error
+            composeOverlay?.visibility = prevComposeVis ?: android.view.View.VISIBLE
+            navigationOverlay?.visibility = prevNavVis ?: android.view.View.GONE
+            null
         }
     }
     // KMK <--
