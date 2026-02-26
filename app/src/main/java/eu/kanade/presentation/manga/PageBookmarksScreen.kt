@@ -70,7 +70,9 @@ fun PageBookmarksScreen(
     val groupedBookmarks = remember(state.bookmarks, state.chapterIdToOrder) {
         state.bookmarks
             .groupBy { it.chapterId }
-            .toList()
+            .map { (chapterId, bookmarks) ->
+                chapterId to bookmarks.sortedBy { it.pageIndex }
+            }
             .sortedBy { (chapterId, _) -> state.chapterIdToOrder[chapterId] ?: Int.MAX_VALUE }
     }
 
