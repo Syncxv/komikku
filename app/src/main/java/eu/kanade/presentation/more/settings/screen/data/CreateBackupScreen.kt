@@ -10,6 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.rememberScreenModel
@@ -41,6 +44,32 @@ class CreateBackupScreen : Screen() {
         val model = rememberScreenModel { CreateBackupScreenModel() }
         val state by model.state.collectAsState()
 
+        // KMK: Hold the .tachibk URI while waiting for the zip file picker
+        var pendingTachibkUri by remember { mutableStateOf<Uri?>(null) }
+
+        // KMK: Second file picker for companion page bookmark images zip
+        val chooseZipFile = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument("application/zip"),
+        ) { zipUri ->
+            val tachibkUri = pendingTachibkUri
+            pendingTachibkUri = null
+            if (tachibkUri != null) {
+                if (zipUri != null) {
+                    context.contentResolver.takePersistableUriPermission(
+                        zipUri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                    )
+                    model.createBackup(context, tachibkUri, zipUri)
+                } else {
+                    // User cancelled zip picker — create backup without page bookmark images
+                    model.createBackup(context, tachibkUri, null)
+                }
+                navigator.pop()
+            }
+        }
+        // KMK <--
+
         val chooseBackupDir = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.CreateDocument("application/*"),
         ) {
@@ -50,8 +79,24 @@ class CreateBackupScreen : Screen() {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or
                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                 )
-                model.createBackup(context, it)
-                navigator.pop()
+                // KMK -->
+                if (state.options.pageBookmarkImages && state.options.pageBookmarks && state.options.libraryEntries) {
+                    // Chain to a second file picker for the companion zip
+                    pendingTachibkUri = it
+                    val zipFilename = BackupCreator.getFilename().replace(".tachibk", ".pagebookmarks.zip")
+                    try {
+                        chooseZipFile.launch(zipFilename)
+                    } catch (e: ActivityNotFoundException) {
+                        // If zip picker fails, proceed without images
+                        pendingTachibkUri = null
+                        model.createBackup(context, it, null)
+                        navigator.pop()
+                    }
+                } else {
+                    model.createBackup(context, it, null)
+                    navigator.pop()
+                }
+                // KMK <--
             }
         }
 
@@ -130,8 +175,8 @@ private class CreateBackupScreenModel : StateScreenModel<CreateBackupScreenModel
         }
     }
 
-    fun createBackup(context: Context, uri: Uri) {
-        BackupCreateJob.startNow(context, uri, state.value.options)
+    fun createBackup(context: Context, uri: Uri, zipUri: Uri?) {
+        BackupCreateJob.startNow(context, uri, state.value.options, zipUri)
     }
 
     @Immutable

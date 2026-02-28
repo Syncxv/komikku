@@ -44,6 +44,10 @@ class BackupRestoreJob(private val context: Context, workerParams: WorkerParamet
             return Result.failure()
         }
 
+        // KMK: Get optional companion zip URI for page bookmark images
+        val zipUri = inputData.getString(ZIP_LOCATION_URI_KEY)?.toUri()
+        // KMK <--
+
         // KMK -->
         backupRestoreStatus.start()
         // KMK <--
@@ -53,7 +57,7 @@ class BackupRestoreJob(private val context: Context, workerParams: WorkerParamet
         setForegroundSafely()
 
         return try {
-            BackupRestorer(context, notifier, isSync).restore(uri, options)
+            BackupRestorer(context, notifier, isSync).restore(uri, options, zipUri)
             Result.success()
         } catch (e: Exception) {
             if (e is CancellationException) {
@@ -94,11 +98,17 @@ class BackupRestoreJob(private val context: Context, workerParams: WorkerParamet
             uri: Uri,
             options: RestoreOptions,
             sync: Boolean = false,
+            // KMK -->
+            zipUri: Uri? = null,
+            // KMK <--
         ) {
             val inputData = workDataOf(
                 LOCATION_URI_KEY to uri.toString(),
                 SYNC_KEY to sync,
                 OPTIONS_KEY to options.asBooleanArray(),
+                // KMK -->
+                ZIP_LOCATION_URI_KEY to zipUri?.toString(),
+                // KMK <--
             )
             val request = OneTimeWorkRequestBuilder<BackupRestoreJob>()
                 .addTag(TAG)
@@ -122,3 +132,6 @@ private const val TAG = "BackupRestore"
 private const val LOCATION_URI_KEY = "location_uri" // String
 private const val SYNC_KEY = "sync" // Boolean
 private const val OPTIONS_KEY = "options" // BooleanArray
+// KMK -->
+private const val ZIP_LOCATION_URI_KEY = "zip_location_uri" // String
+// KMK <--

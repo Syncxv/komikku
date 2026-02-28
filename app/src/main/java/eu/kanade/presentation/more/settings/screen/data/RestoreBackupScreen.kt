@@ -2,13 +2,19 @@ package eu.kanade.presentation.more.settings.screen.data
 
 import android.content.Context
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
@@ -33,6 +39,7 @@ import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import eu.kanade.tachiyomi.util.system.DeviceUtil
 import kotlinx.coroutines.flow.update
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.kmk.KMR
 import tachiyomi.presentation.core.components.LabeledCheckbox
 import tachiyomi.presentation.core.components.LazyColumnWithAction
 import tachiyomi.presentation.core.components.SectionCard
@@ -50,6 +57,16 @@ class RestoreBackupScreen(
         val navigator = LocalNavigator.currentOrThrow
         val model = rememberScreenModel { RestoreBackupScreenModel(context, uri) }
         val state by model.state.collectAsState()
+
+        // KMK: File picker for companion page bookmark images zip
+        val chooseZipFile = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+        ) { zipUri ->
+            if (zipUri != null) {
+                model.setZipUri(zipUri)
+            }
+        }
+        // KMK <--
 
         Scaffold(
             topBar = {
@@ -89,6 +106,36 @@ class RestoreBackupScreen(
                             }
                         }
                     }
+
+                    // KMK: Optional page bookmark images zip picker
+                    item {
+                        SectionCard(KMR.strings.page_bookmark_images) {
+                            if (state.zipUri != null) {
+                                TextButton(
+                                    onClick = { chooseZipFile.launch("application/zip") },
+                                    modifier = Modifier.padding(horizontal = MaterialTheme.padding.medium),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.CheckCircle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Text(
+                                        text = stringResource(KMR.strings.page_bookmark_images_restore_selected),
+                                        modifier = Modifier.padding(start = MaterialTheme.padding.small),
+                                    )
+                                }
+                            } else {
+                                TextButton(
+                                    onClick = { chooseZipFile.launch("application/zip") },
+                                    modifier = Modifier.padding(horizontal = MaterialTheme.padding.medium),
+                                ) {
+                                    Text(text = stringResource(KMR.strings.page_bookmark_images_restore_pick))
+                                }
+                            }
+                        }
+                    }
+                    // KMK <--
                 }
 
                 if (state.error != null) {
@@ -181,11 +228,22 @@ private class RestoreBackupScreenModel(
         }
     }
 
+    // KMK -->
+    fun setZipUri(uri: Uri) {
+        mutableState.update {
+            it.copy(zipUri = uri)
+        }
+    }
+    // KMK <--
+
     fun startRestore() {
         BackupRestoreJob.start(
             context = context,
             uri = uri.toUri(),
             options = state.value.options,
+            // KMK -->
+            zipUri = state.value.zipUri,
+            // KMK <--
         )
     }
 
@@ -225,6 +283,9 @@ private class RestoreBackupScreenModel(
         val error: Any? = null,
         val canRestore: Boolean = false,
         val options: RestoreOptions = RestoreOptions(),
+        // KMK -->
+        val zipUri: Uri? = null,
+        // KMK <--
     )
 }
 

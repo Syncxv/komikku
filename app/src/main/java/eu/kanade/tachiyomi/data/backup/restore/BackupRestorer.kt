@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.data.backup.restore
 
 import android.content.Context
 import android.net.Uri
+import com.hippo.unifile.UniFile
 import eu.kanade.tachiyomi.data.backup.BackupDecoder
 import eu.kanade.tachiyomi.data.backup.BackupNotifier
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
@@ -23,13 +24,21 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.manga.interactor.GetMangaByUrlAndSourceId
+import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.File
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.zip.ZipInputStream
 
 class BackupRestorer(
     private val context: Context,
@@ -45,6 +54,8 @@ class BackupRestorer(
     // SY <--
     // KMK -->
     private val feedRestorer: FeedRestorer = FeedRestorer(),
+    private val getPageBookmarks: GetPageBookmarks = Injekt.get(),
+    private val getMangaByUrlAndSourceId: GetMangaByUrlAndSourceId = Injekt.get(),
     // KMK <--
 ) {
 
@@ -57,10 +68,10 @@ class BackupRestorer(
      */
     private var sourceMapping: Map<Long, String> = emptyMap()
 
-    suspend fun restore(uri: Uri, options: RestoreOptions) {
+    suspend fun restore(uri: Uri, options: RestoreOptions, zipUri: Uri? = null) {
         val startTime = System.currentTimeMillis()
 
-        restoreFromFile(uri, options)
+        restoreFromFile(uri, options, zipUri)
 
         val time = System.currentTimeMillis() - startTime
 
@@ -75,7 +86,7 @@ class BackupRestorer(
         )
     }
 
-    private suspend fun restoreFromFile(uri: Uri, options: RestoreOptions) {
+    private suspend fun restoreFromFile(uri: Uri, options: RestoreOptions, zipUri: Uri? = null) {
         val backup = BackupDecoder(context).decode(uri)
 
         // Store source mapping for error messages
@@ -132,6 +143,12 @@ class BackupRestorer(
 
             // TODO: optionally trigger online library + tracker update
         }
+
+        // KMK: After all manga are restored, restore page bookmark thumbnail images
+        if (options.libraryEntries) {
+            restorePageBookmarkImages(uri, backup.backupManga, zipUri)
+        }
+        // KMK <--
     }
 
     context(scope: CoroutineScope)
@@ -294,4 +311,68 @@ class BackupRestorer(
         }
         return File("")
     }
+
+    // KMK -->
+    /**
+     * Restore page bookmark thumbnail images from a companion .pagebookmarks.zip file.
+     * The zip must be located alongside the .tachibk file with a matching name.
+     * If no companion zip is found, this is a no-op (thumbnails will show placeholders).
+     */
+    private suspend fun restorePageBookmarkImages(tachibkUri: Uri, backupMangas: List<BackupManga>, zipUri: Uri? = null) {
+        // Only proceed if there are page bookmarks to restore
+        val mangasWithBookmarks = backupMangas.filter { it.pageBookmarks.isNotEmpty() }
+        if (mangasWithBookmarks.isEmpty()) return
+
+        // Use explicitly provided zip URI (manual restore) or try to find sibling (auto-backup dir)
+        val resolvedZipUri = if (zipUri != null) {
+            zipUri
+        } else {
+            val tachibkFile = UniFile.fromUri(context, tachibkUri) ?: return
+            val parentDir = tachibkFile.parentFile ?: return
+            val zipFileName = tachibkFile.name?.replace(".tachibk", ".pagebookmarks.zip") ?: return
+            parentDir.findFile(zipFileName)?.uri ?: return
+        }
+
+        try {
+            val thumbsDir = File(context.filesDir, "page_bookmark_thumbs").also { it.mkdirs() }
+
+            // Build a mapping of expected zip entry paths -> new bookmark IDs
+            val pathToBookmarkId = mutableMapOf<String, Long>()
+            for (backupManga in mangasWithBookmarks) {
+                val manga = getMangaByUrlAndSourceId.await(backupManga.url, backupManga.source) ?: continue
+                val bookmarks = getPageBookmarks.awaitForManga(manga.id)
+
+                val mangaDirName = "${backupManga.source}_${md5Hash(backupManga.url)}"
+                for (bookmark in bookmarks) {
+                    val entryPath = "$mangaDirName/${md5Hash(bookmark.chapterUrl)}_${bookmark.pageIndex}.webp"
+                    pathToBookmarkId[entryPath] = bookmark.id
+                }
+            }
+
+            if (pathToBookmarkId.isEmpty()) return
+
+            // Extract matching zip entries to the thumbnails directory
+            val inputStream = context.contentResolver.openInputStream(resolvedZipUri) ?: return
+            ZipInputStream(inputStream).use { zipIn ->
+                var entry = zipIn.nextEntry
+                while (entry != null) {
+                    val bookmarkId = pathToBookmarkId[entry.name]
+                    if (bookmarkId != null) {
+                        val thumbFile = File(thumbsDir, "${bookmarkId}.webp")
+                        thumbFile.outputStream().use { out -> zipIn.copyTo(out) }
+                    }
+                    zipIn.closeEntry()
+                    entry = zipIn.nextEntry
+                }
+            }
+        } catch (e: Exception) {
+            logcat(LogPriority.WARN, e) { "Failed to restore page bookmark images from companion zip" }
+        }
+    }
+
+    private fun md5Hash(input: String): String {
+        val md = MessageDigest.getInstance("MD5")
+        return md.digest(input.toByteArray()).joinToString("") { "%02x".format(it) }.take(12)
+    }
+    // KMK <--
 }

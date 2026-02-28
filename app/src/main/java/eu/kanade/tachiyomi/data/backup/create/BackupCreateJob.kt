@@ -46,13 +46,17 @@ class BackupCreateJob(private val context: Context, workerParams: WorkerParamete
             ?: getAutomaticBackupLocation()
             ?: return Result.failure()
 
+        // KMK: Get optional companion zip URI for manual backups
+        val zipUri = inputData.getString(ZIP_LOCATION_URI_KEY)?.toUri()
+        // KMK <--
+
         setForegroundSafely()
 
         val options = inputData.getBooleanArray(OPTIONS_KEY)?.let { BackupOptions.fromBooleanArray(it) }
             ?: BackupOptions()
 
         return try {
-            val location = BackupCreator(context, isAutoBackup).backup(uri, options)
+            val location = BackupCreator(context, isAutoBackup).backup(uri, options, zipUri)
             if (!isAutoBackup) {
                 notifier.showBackupComplete(UniFile.fromUri(context, location.toUri())!!)
             }
@@ -114,11 +118,14 @@ class BackupCreateJob(private val context: Context, workerParams: WorkerParamete
             }
         }
 
-        fun startNow(context: Context, uri: Uri, options: BackupOptions) {
+        fun startNow(context: Context, uri: Uri, options: BackupOptions, zipUri: Uri? = null) {
             val inputData = workDataOf(
                 IS_AUTO_BACKUP_KEY to false,
                 LOCATION_URI_KEY to uri.toString(),
                 OPTIONS_KEY to options.asBooleanArray(),
+                // KMK -->
+                ZIP_LOCATION_URI_KEY to zipUri?.toString(),
+                // KMK <--
             )
             val request = OneTimeWorkRequestBuilder<BackupCreateJob>()
                 .addTag(TAG_MANUAL)
@@ -147,3 +154,6 @@ private const val TAG_MANUAL = "$TAG_AUTO:manual"
 private const val IS_AUTO_BACKUP_KEY = "is_auto_backup" // Boolean
 private const val LOCATION_URI_KEY = "location_uri" // String
 private const val OPTIONS_KEY = "options" // BooleanArray
+// KMK -->
+private const val ZIP_LOCATION_URI_KEY = "zip_location_uri" // String
+// KMK <--

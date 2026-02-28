@@ -23,6 +23,7 @@ data class BackupOptions(
     // SY <--
     // KMK -->
     val pageBookmarks: Boolean = true,
+    val pageBookmarkImages: Boolean = false,
     // KMK <--
 ) {
 
@@ -43,6 +44,7 @@ data class BackupOptions(
         // SY <--
         // KMK -->
         pageBookmarks,
+        pageBookmarkImages,
         // KMK <--
     )
 
@@ -107,6 +109,12 @@ data class BackupOptions(
                 setter = { options, enabled -> options.copy(pageBookmarks = enabled) },
                 enabled = { it.libraryEntries },
             ),
+            Entry(
+                label = KMR.strings.page_bookmark_images,
+                getter = BackupOptions::pageBookmarkImages,
+                setter = { options, enabled -> options.copy(pageBookmarkImages = enabled) },
+                enabled = { it.libraryEntries && it.pageBookmarks },
+            ),
             // KMK <--
         )
 
@@ -151,6 +159,7 @@ data class BackupOptions(
             // SY <--
             // KMK -->
             pageBookmarks = array[12],
+            pageBookmarkImages = array[13],
             // KMK <--
         )
     }

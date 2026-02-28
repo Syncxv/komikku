@@ -253,4 +253,7 @@
     <string name="page_bookmark_edit_note">Edit note</string>
     <string name="page_bookmark_note_hint">Add a note…</string>
     <string name="page_bookmark_added_on">Saved on %s</string>
+    <string name="page_bookmark_images">Page bookmark images</string>
+    <string name="page_bookmark_images_restore_pick">Select page bookmark images zip (optional)</string>
+    <string name="page_bookmark_images_restore_selected">Page bookmark images zip selected</string>
 </resources>

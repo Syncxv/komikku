@@ -33,14 +33,19 @@ import tachiyomi.domain.manga.interactor.GetFavorites
 import tachiyomi.domain.manga.interactor.GetMergedManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.Date
 import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class BackupCreator(
     private val context: Context,
@@ -63,9 +68,12 @@ class BackupCreator(
     private val savedSearchBackupCreator: SavedSearchBackupCreator = SavedSearchBackupCreator(),
     private val getMergedManga: GetMergedManga = Injekt.get(),
     // SY <--
+    // KMK -->
+    private val getPageBookmarks: GetPageBookmarks = Injekt.get(),
+    // KMK <--
 ) {
 
-    suspend fun backup(uri: Uri, options: BackupOptions): String {
+    suspend fun backup(uri: Uri, options: BackupOptions, zipUri: Uri? = null): String {
         var file: UniFile? = null
         try {
             file = if (isAutoBackup) {
@@ -77,7 +85,15 @@ class BackupCreator(
                     .orEmpty()
                     .sortedByDescending { it.name }
                     .drop(MAX_AUTO_BACKUPS - 1)
-                    .forEach { it.delete() }
+                    .forEach { tachibkFile ->
+                        // KMK: Also delete companion page bookmark images zip
+                        val zipName = tachibkFile.name?.replace(".tachibk", ".pagebookmarks.zip")
+                        if (zipName != null) {
+                            dir?.findFile(zipName)?.delete()
+                        }
+                        // KMK <--
+                        tachibkFile.delete()
+                    }
 
                 // Create new file to place backup
                 dir?.createFile(getFilename())
@@ -93,8 +109,9 @@ class BackupCreator(
             // SY -->
             val mergedManga = getMergedManga.await()
             // SY <--
+            val allMangas = getFavorites.await() + nonFavoriteManga /* SY --> */ + mergedManga /* SY <-- */
             val backupManga =
-                backupMangas(getFavorites.await() + nonFavoriteManga /* SY --> */ + mergedManga /* SY <-- */, options)
+                backupMangas(allMangas, options)
 
             val backup = Backup(
                 backupManga = backupManga,
@@ -134,6 +151,12 @@ class BackupCreator(
             if (isAutoBackup) {
                 backupPreferences.lastAutoBackupTimestamp().set(Instant.now().toEpochMilli())
             }
+
+            // KMK: Create companion zip for page bookmark thumbnail images
+            if (options.pageBookmarkImages && options.pageBookmarks && options.libraryEntries) {
+                createPageBookmarkImagesZip(uri, file, allMangas, backupManga, zipUri)
+            }
+            // KMK <--
 
             return fileUri.toString()
         } catch (e: Exception) {
@@ -194,15 +217,112 @@ class BackupCreator(
 
         return feedBackupCreator()
     }
+
+    /**
+     * Create a companion .pagebookmarks.zip alongside the .tachibk file
+     * containing page bookmark thumbnail images.
+     *
+     * @param originalUri the original URI passed to backup() — for auto-backups this is
+     *        the backup directory; for manual backups this is the .tachibk file URI itself.
+     * @param tachibkFile the UniFile for the .tachibk file that was written.
+     * @param zipUri for manual backups, the URI of the companion zip file (from a second file picker).
+     *        For auto-backups, this is null (the zip is created as a sibling in the directory).
+     */
+    private suspend fun createPageBookmarkImagesZip(
+        originalUri: Uri,
+        tachibkFile: UniFile,
+        mangas: List<Manga>,
+        backupMangas: List<BackupManga>,
+        zipUri: Uri? = null,
+    ) {
+        val thumbsDir = File(context.filesDir, "page_bookmark_thumbs")
+        if (!thumbsDir.exists()) return
+
+        val mangasWithBookmarks = backupMangas.filter { it.pageBookmarks.isNotEmpty() }
+        if (mangasWithBookmarks.isEmpty()) return
+
+        val zipFile: UniFile?
+
+        if (isAutoBackup) {
+            // For auto-backups, originalUri is the backup directory (tree URI).
+            // We can create sibling files directly.
+            val parentDir = UniFile.fromUri(context, originalUri)
+            val zipFileName = tachibkFile.name?.replace(".tachibk", ".pagebookmarks.zip") ?: return
+
+            // Clean up old companion zips
+            parentDir?.listFiles { _, filename -> ZIP_FILENAME_REGEX.matches(filename) }
+                .orEmpty()
+                .forEach { it.delete() }
+
+            zipFile = parentDir?.createFile(zipFileName)
+        } else {
+            // For manual backups, use the zip URI provided by the second file picker.
+            if (zipUri == null) {
+                logcat(LogPriority.WARN) { "No zip URI provided for manual backup — skipping page bookmark images" }
+                return
+            }
+            zipFile = UniFile.fromUri(context, zipUri)
+        }
+
+        if (zipFile == null) {
+            logcat(LogPriority.WARN) { "Could not create companion zip file" }
+            return
+        }
+
+        try {
+            val mangaByKey = mangas.associateBy { Pair(it.source, it.url) }
+            var entriesWritten = 0
+            ZipOutputStream(zipFile.openOutputStream()).use { zipOut ->
+                for (backupManga in mangasWithBookmarks) {
+                    // Find the original manga to get its ID for thumbnail lookup
+                    val manga = mangaByKey[Pair(backupManga.source, backupManga.url)] ?: continue
+
+                    val bookmarks = getPageBookmarks.awaitForManga(manga.id)
+                    if (bookmarks.isEmpty()) continue
+
+                    val mangaDirName = "${backupManga.source}_${md5Hash(backupManga.url)}"
+
+                    for (bookmark in bookmarks) {
+                        val thumbFile = File(thumbsDir, "${bookmark.id}.webp")
+                        if (!thumbFile.exists()) continue
+
+                        val entryPath = "$mangaDirName/${md5Hash(bookmark.chapterUrl)}_${bookmark.pageIndex}.webp"
+                        zipOut.putNextEntry(ZipEntry(entryPath))
+                        thumbFile.inputStream().use { it.copyTo(zipOut) }
+                        zipOut.closeEntry()
+                        entriesWritten++
+                    }
+                }
+            }
+
+            // Delete empty zip files (no thumbnails found on disk)
+            if (entriesWritten == 0) {
+                zipFile.delete()
+            }
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to create page bookmark images zip" }
+            zipFile.delete()
+        }
+    }
     // KMK <--
 
     companion object {
         private const val MAX_AUTO_BACKUPS: Int = 4
         private val FILENAME_REGEX = """${BuildConfig.APPLICATION_ID}_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}.tachibk""".toRegex()
+        // KMK -->
+        private val ZIP_FILENAME_REGEX = """${BuildConfig.APPLICATION_ID}_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}.pagebookmarks.zip""".toRegex()
+        // KMK <--
 
         fun getFilename(): String {
             val date = SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.ENGLISH).format(Date())
             return "${BuildConfig.APPLICATION_ID}_$date.tachibk"
         }
+
+        // KMK -->
+        private fun md5Hash(input: String): String {
+            val md = MessageDigest.getInstance("MD5")
+            return md.digest(input.toByteArray()).joinToString("") { "%02x".format(it) }.take(12)
+        }
+        // KMK <--
     }
 }
