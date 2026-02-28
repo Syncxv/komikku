@@ -21,6 +21,9 @@ data class BackupOptions(
     val customInfo: Boolean = true,
     val savedSearchesFeeds: Boolean = true,
     // SY <--
+    // KMK -->
+    val pageBookmarks: Boolean = true,
+    // KMK <--
 ) {
 
     fun asBooleanArray() = booleanArrayOf(
@@ -38,6 +41,9 @@ data class BackupOptions(
         customInfo,
         savedSearchesFeeds,
         // SY <--
+        // KMK -->
+        pageBookmarks,
+        // KMK <--
     )
 
     fun canCreate() =
@@ -94,6 +100,14 @@ data class BackupOptions(
                 setter = { options, enabled -> options.copy(savedSearchesFeeds = enabled) },
             ),
             // SY <--
+            // KMK -->
+            Entry(
+                label = KMR.strings.page_bookmarks,
+                getter = BackupOptions::pageBookmarks,
+                setter = { options, enabled -> options.copy(pageBookmarks = enabled) },
+                enabled = { it.libraryEntries },
+            ),
+            // KMK <--
         )
 
         val settingsOptions = persistentListOf(
@@ -135,6 +149,9 @@ data class BackupOptions(
             customInfo = array[10],
             savedSearchesFeeds = array[11],
             // SY <--
+            // KMK -->
+            pageBookmarks = array[12],
+            // KMK <--
         )
     }
 

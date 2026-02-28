@@ -58,6 +58,9 @@ data class BackupManga(
     @ProtoNumber(804) var customDescription: String? = null,
     @ProtoNumber(805) var customGenre: List<String>? = null,
 
+    // KMK specific values
+    @ProtoNumber(620) var pageBookmarks: List<BackupPageBookmark> = emptyList(),
+
 ) {
     fun getMangaImpl(): Manga {
         return Manga.create().copy(

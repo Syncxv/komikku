@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupFlatMetadata
 import eu.kanade.tachiyomi.data.backup.models.BackupHistory
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupMergedMangaReference
+import eu.kanade.tachiyomi.data.backup.models.BackupPageBookmark
 import eu.kanade.tachiyomi.data.backup.models.BackupTracking
 import exh.EXHMigrations
 import exh.source.MERGED_SOURCE_ID
@@ -24,6 +25,7 @@ import tachiyomi.domain.manga.interactor.InsertFlatMetadata
 import tachiyomi.domain.manga.interactor.SetCustomMangaInfo
 import tachiyomi.domain.manga.model.CustomMangaInfo
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.pagebookmarks.repository.PageBookmarkRepository
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.domain.track.model.Track
@@ -50,6 +52,9 @@ class MangaRestorer(
     private val insertFlatMetadata: InsertFlatMetadata = Injekt.get(),
     private val getFlatMetadataById: GetFlatMetadataById = Injekt.get(),
     // SY <--
+    // KMK -->
+    private val pageBookmarkRepository: PageBookmarkRepository = Injekt.get(),
+    // KMK <--
 ) {
     private var now = ZonedDateTime.now()
     private var currentFetchWindow = fetchInterval.getWindow(now)
@@ -105,6 +110,9 @@ class MangaRestorer(
                 flatMetadata = backupManga.flatMetadata,
                 customManga = backupManga.getCustomMangaInfo(),
                 // SY <--
+                // KMK -->
+                pageBookmarks = backupManga.pageBookmarks,
+                // KMK <--
             )
 
             if (isSync) {
@@ -346,6 +354,9 @@ class MangaRestorer(
         flatMetadata: BackupFlatMetadata?,
         customManga: CustomMangaInfo?,
         // SY <--
+        // KMK -->
+        pageBookmarks: List<BackupPageBookmark>,
+        // KMK <--
     ): Manga {
         restoreCategories(manga, categories, backupCategories)
         restoreChapters(manga, chapters)
@@ -358,6 +369,9 @@ class MangaRestorer(
         flatMetadata?.let { restoreFlatMetadata(manga.id, it) }
         restoreEditedInfo(customManga?.copy(id = manga.id))
         // SY <--
+        // KMK -->
+        restorePageBookmarks(manga, pageBookmarks)
+        // KMK <--
 
         return manga
     }
@@ -496,6 +510,33 @@ class MangaRestorer(
             }
         }
     }
+
+    // KMK -->
+    private suspend fun restorePageBookmarks(manga: Manga, backupPageBookmarks: List<BackupPageBookmark>) {
+        if (backupPageBookmarks.isEmpty()) return
+
+        // Build a map of chapter URL -> chapter ID for this manga
+        val chaptersByUrl = getChaptersByMangaId.await(manga.id)
+            .associateBy { it.url }
+
+        // Get existing page bookmarks to avoid duplicates
+        val existingBookmarks = pageBookmarkRepository.getBookmarksForManga(manga.id)
+        val existingKeys = existingBookmarks.map { Triple(it.mangaId, it.chapterId, it.pageIndex) }.toSet()
+
+        for (backupBookmark in backupPageBookmarks) {
+            val chapter = chaptersByUrl[backupBookmark.chapterUrl] ?: continue
+
+            val key = Triple(manga.id, chapter.id, backupBookmark.pageIndex)
+            if (key in existingKeys) continue
+
+            val pageBookmark = backupBookmark.toPageBookmark(
+                mangaId = manga.id,
+                chapterId = chapter.id,
+            )
+            pageBookmarkRepository.insert(pageBookmark)
+        }
+    }
+    // KMK <--
 
     // SY -->
     /**

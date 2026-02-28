@@ -301,11 +301,64 @@ This is honest and functional — the same approach any real-world reader app wo
 
 ---
 
+## Backup & Restore
+
+### Strategy: Option C — Metadata in `.tachibk` + Optional Companion Zip for Images
+
+Page bookmark **metadata** is always included in the standard `.tachibk` backup file. It's tiny (a few KB for hundreds of bookmarks) and uses the same protobuf serialization as chapters, history, and tracking.
+
+Thumbnail **images** are optionally exported as a separate companion file (Phase 2, not yet implemented).
+
+### Phase 1: Metadata Backup (in `.tachibk`)
+
+#### `BackupPageBookmark` model
+```kotlin
+@Serializable
+data class BackupPageBookmark(
+    @ProtoNumber(1) var chapterUrl: String,
+    @ProtoNumber(2) var chapterName: String,
+    @ProtoNumber(3) var pageIndex: Int,
+    @ProtoNumber(4) var scrollOffset: Double = 0.0,
+    @ProtoNumber(5) var imageUrl: String = "",
+    @ProtoNumber(6) var cropTop: Double = 0.0,
+    @ProtoNumber(7) var cropBottom: Double = 1.0,
+    @ProtoNumber(8) var addedAt: Long = 0,
+    @ProtoNumber(9) var note: String = "",
+)
+```
+
+- Stored as `@ProtoNumber(620) var pageBookmarks: List<BackupPageBookmark>` on `BackupManga`.
+- Uses `chapterUrl` (not `chapterId`) for cross-device matching — chapter IDs are local auto-increments.
+- On restore, matches chapter URL to find the local `chapterId`, then inserts via `PageBookmarkRepository`.
+
+#### Backup flow
+1. `PageBookmarksBackupCreator` queries all page bookmarks for a manga via `GetPageBookmarks.awaitForManga(mangaId)`.
+2. Converts each `PageBookmark` → `BackupPageBookmark`, looking up chapter URL from the chapters already queried.
+3. Added to `BackupManga.pageBookmarks`.
+
+#### Restore flow
+1. `MangaRestorer.restoreMangaDetails()` receives `pageBookmarks: List<BackupPageBookmark>`.
+2. For each `BackupPageBookmark`, finds the matching local chapter by URL.
+3. Checks for duplicates (same manga + chapter + page index).
+4. Inserts new bookmarks via `PageBookmarkRepository.insert()`.
+
+#### UI options
+- `BackupOptions` gets `pageBookmarks: Boolean = true` field.
+- Shows as "Page bookmarks" in the library backup options, enabled when `libraryEntries` is true.
+- `RestoreOptions` is unchanged — page bookmarks restore automatically with library entries.
+
+### Phase 2: Image Backup (Future)
+
+Optional companion `.pagebookmarks.zip` containing thumbnail WebP files. Not yet implemented.
+
+---
+
 ## Summary
 
-- **No screenshots** — use raw image data + `BitmapRegionDecoder` for cropped thumbnails.
+- **Screenshot-based thumbnails** — uses `PixelCopy` with hidden UI overlays for accurate zoom-level captures.
 - **No schema changes** to main DB — fully separate `page_bookmarks.db`.
 - **Normalised float offsets** — resolution-independent, survives screen size changes.
 - **Two-phase scroll restoration** — navigate to page first, then pixel-adjust after image loads.
 - **Webtoon-aware** — captures visible viewport region only, not the full 4000px-tall strip.
 - **Migration-safe** — bookmarks survive but with an honest "positions may be approximate" warning.
+- **Backup-safe** — metadata always in `.tachibk`, thumbnails regenerated on restore.

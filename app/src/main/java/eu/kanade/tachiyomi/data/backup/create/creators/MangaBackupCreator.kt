@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupChapter
 import eu.kanade.tachiyomi.data.backup.models.BackupFlatMetadata
 import eu.kanade.tachiyomi.data.backup.models.BackupHistory
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
+import eu.kanade.tachiyomi.data.backup.models.BackupPageBookmark
 import eu.kanade.tachiyomi.data.backup.models.backupChapterMapper
 import eu.kanade.tachiyomi.data.backup.models.backupMergedMangaReferenceMapper
 import eu.kanade.tachiyomi.data.backup.models.backupTrackMapper
@@ -32,6 +33,9 @@ class MangaBackupCreator(
     private val getCustomMangaInfo: GetCustomMangaInfo = Injekt.get(),
     private val getFlatMetadataById: GetFlatMetadataById = Injekt.get(),
     // SY <--
+    // KMK -->
+    private val pageBookmarksBackupCreator: PageBookmarksBackupCreator = PageBookmarksBackupCreator(),
+    // KMK <--
 ) {
 
     suspend operator fun invoke(mangas: List<Manga>, options: BackupOptions): List<BackupManga> {
@@ -115,6 +119,15 @@ class MangaBackupCreator(
                 }
             }
         }
+
+        // KMK -->
+        if (options.pageBookmarks) {
+            val pageBookmarks = pageBookmarksBackupCreator.backupPageBookmarks(manga.id)
+            if (pageBookmarks.isNotEmpty()) {
+                mangaObject.pageBookmarks = pageBookmarks
+            }
+        }
+        // KMK <--
 
         return mangaObject
     }
