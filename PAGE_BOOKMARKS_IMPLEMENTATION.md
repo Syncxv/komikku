@@ -52,7 +52,7 @@ This document details the complete implementation and polish of the **Page Bookm
     *   Inserts via `PageBookmarkRepository`.
 *   **Backup Options**: Added `pageBookmarks: Boolean = true` field to `BackupOptions` with a UI entry labeled "Page bookmarks", enabled when `libraryEntries` is true. Restore is automatic with library entries (no separate toggle).
 
-## 7. Backup & Restore — Phase 2: Thumbnail Images (companion zip)
+## 7. Backup & Restore — Phase 2: Thumbnail Images (companion zip) (`7eefb98367`)
 
 ### Overview
 When the "Page bookmark images" backup option is enabled, a companion `.pagebookmarks.zip` file is created containing all page bookmark thumbnail WebP images. This is a separate file from the `.tachibk` because Android's SAF (Storage Access Framework) only grants access to individual files via `ACTION_CREATE_DOCUMENT` — no parent directory access is available to create sibling files.
