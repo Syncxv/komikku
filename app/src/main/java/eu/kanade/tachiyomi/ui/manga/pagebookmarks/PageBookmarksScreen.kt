@@ -80,10 +80,13 @@ class PageBookmarksScreen(
         init {
             screenModelScope.launch(Dispatchers.IO) {
                 manga = getManga.await(mangaId)
-                mutableState.update { it.copy(mangaTitle = manga?.title.orEmpty()) }
+                val currentManga = manga ?: return@launch
+                mutableState.update { it.copy(mangaTitle = currentManga.title) }
                 // Load chapter sort order (no filter so all chapters are included)
                 val chapters = getChaptersByMangaId.await(mangaId, applyFilter = false)
-                val orderMap = chapters.mapIndexed { index, chapter -> chapter.id to index }.toMap()
+                val orderMap = chapters.sortedWith(tachiyomi.domain.chapter.service.getChapterSort(currentManga))
+                    .mapIndexed { index, chapter -> chapter.id to index }
+                    .toMap()
                 mutableState.update { it.copy(chapterIdToOrder = orderMap) }
             }
 
