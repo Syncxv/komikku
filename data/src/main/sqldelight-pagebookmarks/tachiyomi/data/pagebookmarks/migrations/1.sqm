@@ -1,0 +1,2 @@
+ALTER TABLE page_bookmarks ADD COLUMN chapter_number REAL NOT NULL DEFAULT -1.0;
+ALTER TABLE page_bookmarks ADD COLUMN scanlator TEXT;

@@ -124,4 +124,3 @@ class PageBookmarksScreen(
         val chapterIdToOrder: Map<Long, Int> = emptyMap(),
     )
 }
-

@@ -16,13 +16,17 @@ data class BackupPageBookmark(
     @ProtoNumber(7) var cropBottom: Double = 1.0,
     @ProtoNumber(8) var addedAt: Long = 0,
     @ProtoNumber(9) var note: String = "",
+    @ProtoNumber(10) var chapterNumber: Double = -1.0,
+    @ProtoNumber(11) var scanlator: String? = null,
 ) {
-    fun toPageBookmark(mangaId: Long, chapterId: Long): PageBookmark {
+    fun toPageBookmark(mangaId: Long, chapterId: Long, fallbackChapterNumber: Double = -1.0, fallbackScanlator: String? = null): PageBookmark {
         return PageBookmark(
             mangaId = mangaId,
             chapterId = chapterId,
             chapterUrl = this@BackupPageBookmark.chapterUrl,
             chapterName = this@BackupPageBookmark.chapterName,
+            chapterNumber = if (this@BackupPageBookmark.chapterNumber != -1.0) this@BackupPageBookmark.chapterNumber else fallbackChapterNumber,
+            scanlator = this@BackupPageBookmark.scanlator ?: fallbackScanlator,
             pageIndex = this@BackupPageBookmark.pageIndex,
             scrollOffset = this@BackupPageBookmark.scrollOffset,
             imageUrl = this@BackupPageBookmark.imageUrl,
@@ -38,6 +42,8 @@ data class BackupPageBookmark(
             return BackupPageBookmark(
                 chapterUrl = bookmark.chapterUrl,
                 chapterName = bookmark.chapterName,
+                chapterNumber = bookmark.chapterNumber,
+                scanlator = bookmark.scanlator,
                 pageIndex = bookmark.pageIndex,
                 scrollOffset = bookmark.scrollOffset,
                 imageUrl = bookmark.imageUrl,

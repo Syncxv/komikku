@@ -532,6 +532,8 @@ class MangaRestorer(
             val pageBookmark = backupBookmark.toPageBookmark(
                 mangaId = manga.id,
                 chapterId = chapter.id,
+                fallbackChapterNumber = chapter.chapterNumber,
+                fallbackScanlator = chapter.scanlator,
             )
             pageBookmarkRepository.insert(pageBookmark)
         }

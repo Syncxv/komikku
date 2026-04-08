@@ -53,4 +53,5 @@ val migrations: List<Migration>
         TrustExtensionRepositoryMigration(),
         CategoryPreferencesCleanupMigration(),
         RemoveDuplicateReaderPreferenceMigration(),
+        PageBookmarksChapterInfoMigration(),
     )

@@ -6,6 +6,8 @@ data class PageBookmark(
     val chapterId: Long,
     val chapterUrl: String,
     val chapterName: String,
+    val chapterNumber: Double,
+    val scanlator: String?,
     val pageIndex: Int,
     val scrollOffset: Double = 0.0,
     val imageUrl: String = "",

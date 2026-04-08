@@ -38,10 +38,10 @@ import mihon.domain.extensionrepo.service.ExtensionRepoService
 import mihon.domain.migration.usecases.MigrateMangaUseCase
 import mihon.domain.upcoming.interactor.GetUpcomingManga
 import tachiyomi.data.category.CategoryRepositoryImpl
-import tachiyomi.data.pagebookmarks.PageBookmarkRepositoryImpl
 import tachiyomi.data.chapter.ChapterRepositoryImpl
 import tachiyomi.data.history.HistoryRepositoryImpl
 import tachiyomi.data.manga.MangaRepositoryImpl
+import tachiyomi.data.pagebookmarks.PageBookmarkRepositoryImpl
 import tachiyomi.data.release.ReleaseServiceImpl
 import tachiyomi.data.source.SourceRepositoryImpl
 import tachiyomi.data.source.StubSourceRepositoryImpl
@@ -49,11 +49,6 @@ import tachiyomi.data.track.TrackRepositoryImpl
 import tachiyomi.data.updates.UpdatesRepositoryImpl
 import tachiyomi.domain.category.interactor.CreateCategoryWithName
 import tachiyomi.domain.category.interactor.DeleteCategory
-import tachiyomi.domain.pagebookmarks.interactor.DeletePageBookmark
-import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
-import tachiyomi.domain.pagebookmarks.interactor.TogglePageBookmark
-import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkNote
-import tachiyomi.domain.pagebookmarks.repository.PageBookmarkRepository
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.HideCategory
 import tachiyomi.domain.category.interactor.RenameCategory
@@ -89,6 +84,11 @@ import tachiyomi.domain.manga.interactor.ResetViewerFlags
 import tachiyomi.domain.manga.interactor.SetMangaChapterFlags
 import tachiyomi.domain.manga.interactor.UpdateMangaNotes
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.pagebookmarks.interactor.DeletePageBookmark
+import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
+import tachiyomi.domain.pagebookmarks.interactor.TogglePageBookmark
+import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkNote
+import tachiyomi.domain.pagebookmarks.repository.PageBookmarkRepository
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.domain.release.service.ReleaseService
 import tachiyomi.domain.source.interactor.GetRemoteManga

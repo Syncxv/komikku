@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.ui.reader
 
-import logcat.logcat
 import android.app.Application
 import android.net.Uri
 import androidx.annotation.ColorInt
@@ -77,6 +76,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import logcat.LogPriority
+import logcat.logcat
 import tachiyomi.core.common.preference.toggle
 import tachiyomi.core.common.storage.UniFileTempFileManager
 import tachiyomi.core.common.util.lang.launchIO
@@ -1043,14 +1043,14 @@ class ReaderViewModel @JvmOverloads constructor(
         val scrollOffset: Double,
         val cropTop: Double,
         val cropBottom: Double,
-        val imageUrl: String
+        val imageUrl: String,
     )
 
     private fun getOriginalPageInfo(
         page: ReaderPage,
         scrollOffset: Double,
         cropTop: Double,
-        cropBottom: Double
+        cropBottom: Double,
     ): OriginalPageInfo {
         val filename = page.uri?.lastPathSegment ?: page.url
         if (filename.isBlank()) {
@@ -1125,6 +1125,8 @@ class ReaderViewModel @JvmOverloads constructor(
             chapterId = chapter.id!!,
             chapterUrl = chapter.url,
             chapterName = chapter.name,
+            chapterNumber = chapter.chapter_number.toDouble(),
+            scanlator = chapter.scanlator,
             pageIndex = originalInfo.index,
             scrollOffset = originalInfo.scrollOffset,
             imageUrl = originalInfo.imageUrl,

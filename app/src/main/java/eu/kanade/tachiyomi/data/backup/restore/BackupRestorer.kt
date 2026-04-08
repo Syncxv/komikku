@@ -358,7 +358,7 @@ class BackupRestorer(
                 while (entry != null) {
                     val bookmarkId = pathToBookmarkId[entry.name]
                     if (bookmarkId != null) {
-                        val thumbFile = File(thumbsDir, "${bookmarkId}.webp")
+                        val thumbFile = File(thumbsDir, "$bookmarkId.webp")
                         thumbFile.outputStream().use { out -> zipIn.copyTo(out) }
                     }
                     zipIn.closeEntry()

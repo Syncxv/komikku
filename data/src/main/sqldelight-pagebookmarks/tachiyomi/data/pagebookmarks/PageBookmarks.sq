@@ -4,6 +4,8 @@ CREATE TABLE page_bookmarks (
     chapter_id    INTEGER NOT NULL,
     chapter_url   TEXT    NOT NULL,
     chapter_name  TEXT    NOT NULL,
+    chapter_number REAL   NOT NULL,
+    scanlator     TEXT,
     page_index    INTEGER NOT NULL,
     scroll_offset REAL    NOT NULL DEFAULT 0.0,
     image_url     TEXT    NOT NULL DEFAULT '',
@@ -25,8 +27,8 @@ FROM page_bookmarks
 WHERE _id = :id;
 
 insert:
-INSERT INTO page_bookmarks(manga_id, chapter_id, chapter_url, chapter_name, page_index, scroll_offset, image_url, crop_top, crop_bottom, added_at, note)
-VALUES (:mangaId, :chapterId, :chapterUrl, :chapterName, :pageIndex, :scrollOffset, :imageUrl, :cropTop, :cropBottom, :addedAt, :note);
+INSERT INTO page_bookmarks(manga_id, chapter_id, chapter_url, chapter_name, chapter_number, scanlator, page_index, scroll_offset, image_url, crop_top, crop_bottom, added_at, note)
+VALUES (:mangaId, :chapterId, :chapterUrl, :chapterName, :chapterNumber, :scanlator, :pageIndex, :scrollOffset, :imageUrl, :cropTop, :cropBottom, :addedAt, :note);
 
 delete:
 DELETE FROM page_bookmarks
@@ -51,6 +53,11 @@ LIMIT 1;
 updateNote:
 UPDATE page_bookmarks
 SET note = :note
+WHERE _id = :id;
+
+updateChapterInfo:
+UPDATE page_bookmarks
+SET chapter_number = :chapterNumber, scanlator = :scanlator
 WHERE _id = :id;
 
 getAll:

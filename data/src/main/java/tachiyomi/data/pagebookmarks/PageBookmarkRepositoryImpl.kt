@@ -52,6 +52,8 @@ class PageBookmarkRepositoryImpl(
                 chapterId = bookmark.chapterId,
                 chapterUrl = bookmark.chapterUrl,
                 chapterName = bookmark.chapterName,
+                chapterNumber = bookmark.chapterNumber,
+                scanlator = bookmark.scanlator,
                 pageIndex = bookmark.pageIndex.toLong(),
                 scrollOffset = bookmark.scrollOffset,
                 imageUrl = bookmark.imageUrl,
