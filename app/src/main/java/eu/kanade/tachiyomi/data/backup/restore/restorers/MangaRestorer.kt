@@ -524,16 +524,17 @@ class MangaRestorer(
         val existingKeys = existingBookmarks.map { Triple(it.mangaId, it.chapterId, it.pageIndex) }.toSet()
 
         for (backupBookmark in backupPageBookmarks) {
-            val chapter = chaptersByUrl[backupBookmark.chapterUrl] ?: continue
+            val chapter = chaptersByUrl[backupBookmark.chapterUrl]
+            val chapterId = chapter?.id ?: -1L
 
-            val key = Triple(manga.id, chapter.id, backupBookmark.pageIndex)
+            val key = Triple(manga.id, chapterId, backupBookmark.pageIndex)
             if (key in existingKeys) continue
 
             val pageBookmark = backupBookmark.toPageBookmark(
                 mangaId = manga.id,
-                chapterId = chapter.id,
-                fallbackChapterNumber = chapter.chapterNumber,
-                fallbackScanlator = chapter.scanlator,
+                chapterId = chapterId,
+                fallbackChapterNumber = chapter?.chapterNumber ?: -1.0,
+                fallbackScanlator = chapter?.scanlator,
             )
             pageBookmarkRepository.insert(pageBookmark)
         }
