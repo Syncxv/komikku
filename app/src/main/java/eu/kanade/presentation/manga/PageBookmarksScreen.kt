@@ -52,6 +52,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import tachiyomi.domain.chapter.model.Chapter
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.window.DialogProperties
+
 @Composable
 fun PageBookmarksScreen(
     state: PageBookmarksScreen.State,
@@ -59,12 +69,15 @@ fun PageBookmarksScreen(
     onBookmarkClick: (PageBookmark) -> Unit,
     onDeleteBookmark: (PageBookmark) -> Unit,
     onUpdateNote: (Long, String) -> Unit,
+    onMigrateBookmarks: (Map<Long, Chapter>) -> Unit,
     getThumbnailFile: (PageBookmark) -> File?,
+    getAutoMatchPreview: (List<PageBookmark>) -> Map<PageBookmark, Chapter?>,
 ) {
     var selectedBookmark by remember { mutableStateOf<PageBookmark?>(null) }
     var bookmarkToDelete by remember { mutableStateOf<PageBookmark?>(null) }
     var editingNote by remember { mutableStateOf<PageBookmark?>(null) }
     var noteText by remember { mutableStateOf("") }
+    var showOrphanDialog by remember { mutableStateOf(false) }
 
     // Group bookmarks by chapter, ordered by the user's chapter sort setting
     val groupedBookmarks = remember(state.bookmarks, state.chapterIdToOrder) {
@@ -99,7 +112,7 @@ fun PageBookmarksScreen(
             ) {
                 CircularProgressIndicator()
             }
-        } else if (state.bookmarks.isEmpty()) {
+        } else if (state.bookmarks.isEmpty() && state.orphanedBookmarks.isEmpty()) {
             EmptyBookmarksContent(
                 modifier = Modifier
                     .fillMaxSize()
@@ -112,6 +125,46 @@ fun PageBookmarksScreen(
                     // Use modifier padding instead of contentPadding so stickyHeaders work correctly
                     .padding(contentPadding),
             ) {
+                if (state.orphanedBookmarks.isNotEmpty()) {
+                    item(key = "orphaned-warning") {
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(MaterialTheme.padding.small)
+                                .clip(RoundedCornerShape(8.dp))
+                                .combinedClickable(
+                                    onClick = { showOrphanDialog = true }
+                                ),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(MaterialTheme.padding.medium),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.BookmarkBorder,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.size(MaterialTheme.padding.medium))
+                                Column {
+                                    Text(
+                                        text = "${state.orphanedBookmarks.size} orphaned bookmarks",
+                                        style = MaterialTheme.typography.titleSmall,
+                                    )
+                                    Text(
+                                        text = "Chapters not found. Please re-map them.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 groupedBookmarks.forEach { (chapterId, bookmarks) ->
                     val chapterName = bookmarks.first().chapterName
                     stickyHeader(
@@ -168,6 +221,16 @@ fun PageBookmarksScreen(
                 }
             }
         }
+    }
+
+    if (showOrphanDialog) {
+        OrphanBookmarksMigrateDialog(
+            orphans = state.orphanedBookmarks,
+            chapters = state.chapters,
+            onDismissRequest = { showOrphanDialog = false },
+            onMigrate = onMigrateBookmarks,
+            getAutoMatchPreview = getAutoMatchPreview,
+        )
     }
 
     // Long-press actions dialog
@@ -285,6 +348,159 @@ fun PageBookmarksScreen(
             },
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OrphanBookmarksMigrateDialog(
+    orphans: List<PageBookmark>,
+    chapters: List<Chapter>,
+    onDismissRequest: () -> Unit,
+    onMigrate: (Map<Long, Chapter>) -> Unit,
+    getAutoMatchPreview: (List<PageBookmark>) -> Map<PageBookmark, Chapter?>,
+) {
+    val mappings = remember { mutableStateMapOf<Long, Chapter>() }
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier
+            .fillMaxWidth(0.9f)
+            .padding(vertical = 16.dp),
+        title = {
+            Text(text = "Map Orphaned Bookmarks")
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Select a new chapter for each bookmark, or use Auto-Match.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                    items(orphans) { orphan ->
+                        var expanded by remember { mutableStateOf(false) }
+                        val selectedChapter = mappings[orphan.id]
+                        val nameText = selectedChapter?.let {
+                            if (it.scanlator.isNullOrBlank()) it.name else "${it.name} [${it.scanlator}]"
+                        } ?: "Select Chapter"
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "Bookmark: ${orphan.chapterName} (Page ${orphan.pageIndex + 1})",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                            )
+                            if (orphan.chapterNumber != -1.0) {
+                                Text(
+                                    text = "Saved Number: ${orphan.chapterNumber} | Scanlator: ${orphan.scanlator ?: "Any"}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                Text(
+                                    text = "No saved chapter number context (Older backup).",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            ExposedDropdownMenuBox(
+                                expanded = expanded,
+                                onExpandedChange = { expanded = it },
+                            ) {
+                                OutlinedTextField(
+                                    value = nameText,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                                    },
+                                    modifier = Modifier.menuAnchor(
+                                        type = androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable
+                                    )
+                                )
+
+                                ExposedDropdownMenu(
+                                    expanded = expanded,
+                                    onDismissRequest = { expanded = false },
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("None") },
+                                        onClick = {
+                                            mappings.remove(orphan.id)
+                                            expanded = false
+                                        }
+                                    )
+                                    val filteredChapters = remember(orphan, chapters) {
+                                        if (orphan.chapterNumber != -1.0) {
+                                            val candidates = chapters.filter { it.chapterNumber == orphan.chapterNumber }
+                                            candidates.ifEmpty { chapters }
+                                        } else {
+                                            chapters
+                                        }
+                                    }
+                                    filteredChapters.forEach { chapter ->
+                                        val textVal = if (chapter.scanlator.isNullOrBlank()) chapter.name else "${chapter.name} [${chapter.scanlator}]"
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(textVal)
+                                            },
+                                            onClick = {
+                                                mappings[orphan.id] = chapter
+                                                expanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextButton(
+                    onClick = {
+                        val autoMatched = getAutoMatchPreview(orphans)
+                        mappings.clear()
+                        autoMatched.forEach { (bookmark, chapter) ->
+                            if (chapter != null) {
+                                mappings[bookmark.id] = chapter
+                            }
+                        }
+                    }
+                ) {
+                    Text(text = "Auto-Match")
+                }
+                TextButton(
+                    onClick = {
+                        onMigrate(mappings)
+                        onDismissRequest()
+                    },
+                    enabled = mappings.isNotEmpty()
+                ) {
+                    Text(text = "Migrate")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(text = stringResource(MR.strings.action_cancel))
+            }
+        },
+    )
 }
 
 @Composable

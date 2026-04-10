@@ -14,14 +14,18 @@ import eu.kanade.presentation.manga.PageBookmarksScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
+import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.pagebookmarks.interactor.DeletePageBookmark
 import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
+import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkChapter
 import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkNote
 import tachiyomi.domain.pagebookmarks.model.PageBookmark
 import uy.kohesive.injekt.Injekt
@@ -48,7 +52,9 @@ class PageBookmarksScreen(
             },
             onDeleteBookmark = screenModel::deleteBookmark,
             onUpdateNote = screenModel::updateNote,
+            onMigrateBookmarks = screenModel::migrateBookmarks,
             getThumbnailFile = screenModel::getThumbnailFile,
+            getAutoMatchPreview = screenModel::getAutoMatchPreview,
         )
     }
 
@@ -70,6 +76,7 @@ class PageBookmarksScreen(
         private val getPageBookmarks: GetPageBookmarks = Injekt.get(),
         private val deletePageBookmark: DeletePageBookmark = Injekt.get(),
         private val updatePageBookmarkNote: UpdatePageBookmarkNote = Injekt.get(),
+        private val updatePageBookmarkChapter: UpdatePageBookmarkChapter = Injekt.get(),
         private val getManga: GetManga = Injekt.get(),
         private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
     ) : StateScreenModel<State>(State()) {
@@ -91,10 +98,23 @@ class PageBookmarksScreen(
             }
 
             screenModelScope.launch {
-                getPageBookmarks.subscribeForManga(mangaId)
-                    .collect { bookmarks ->
-                        mutableState.update { it.copy(bookmarks = bookmarks, isLoading = false) }
+                combine(
+                    getPageBookmarks.subscribeForManga(mangaId),
+                    getChaptersByMangaId.subscribe(mangaId, applyFilter = false),
+                ) { bookmarks, chapters ->
+                    val chapterIds = chapters.map { it.id }.toSet()
+                    val validBookmarks = bookmarks.filter { it.chapterId in chapterIds }
+                    val orphanedBookmarks = bookmarks.filterNot { it.chapterId in chapterIds }
+
+                    mutableState.update {
+                        it.copy(
+                            bookmarks = validBookmarks,
+                            orphanedBookmarks = orphanedBookmarks,
+                            chapters = chapters,
+                            isLoading = false
+                        )
                     }
+                }.collect { }
             }
         }
 
@@ -111,6 +131,56 @@ class PageBookmarksScreen(
             }
         }
 
+        fun migrateBookmarks(mappings: Map<Long, Chapter>) {
+            screenModelScope.launchNonCancellable {
+                state.value.orphanedBookmarks.forEach { bookmark ->
+                    val newChapter = mappings[bookmark.id]
+                    if (newChapter != null) {
+                        updatePageBookmarkChapter.await(
+                            id = bookmark.id,
+                            chapterId = newChapter.id,
+                            chapterUrl = newChapter.url,
+                            chapterName = newChapter.name,
+                            chapterNumber = newChapter.chapterNumber,
+                            scanlator = newChapter.scanlator,
+                        )
+                    }
+                }
+            }
+        }
+
+        fun getAutoMatchPreview(orphans: List<PageBookmark>): Map<PageBookmark, Chapter?> {
+            val chaptersByNumber = state.value.chapters.groupBy { it.chapterNumber }
+            val chaptersByName = state.value.chapters.groupBy { it.name }
+            val map = mutableMapOf<PageBookmark, Chapter?>()
+
+            for (orphan in orphans) {
+                // If chapter number is -1.0, fallback to matching by exact chapter name
+                if (orphan.chapterNumber == -1.0) {
+                    val nameCandidates = chaptersByName[orphan.chapterName] ?: emptyList()
+                    if (nameCandidates.size == 1) {
+                        map[orphan] = nameCandidates.first()
+                    } else if (nameCandidates.size > 1) {
+                        map[orphan] = nameCandidates.find { it.scanlator == orphan.scanlator } ?: nameCandidates.firstOrNull()
+                    } else {
+                        map[orphan] = null
+                    }
+                    continue
+                }
+
+                val candidates = chaptersByNumber[orphan.chapterNumber] ?: emptyList()
+                if (candidates.size == 1) {
+                    map[orphan] = candidates.first()
+                } else if (candidates.size > 1) {
+                    // Try to match exact scanlator if multiple sharing same number
+                    map[orphan] = candidates.find { it.scanlator == orphan.scanlator } ?: candidates.firstOrNull()
+                } else {
+                    map[orphan] = null
+                }
+            }
+            return map
+        }
+
         fun getThumbnailFile(bookmark: PageBookmark): File? {
             return thumbnailProvider.getThumbnailFile(bookmark, manga)
         }
@@ -119,6 +189,8 @@ class PageBookmarksScreen(
     @Immutable
     data class State(
         val bookmarks: List<PageBookmark> = emptyList(),
+        val orphanedBookmarks: List<PageBookmark> = emptyList(),
+        val chapters: List<Chapter> = emptyList(),
         val mangaTitle: String = "",
         val isLoading: Boolean = true,
         val chapterIdToOrder: Map<Long, Int> = emptyMap(),

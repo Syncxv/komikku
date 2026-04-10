@@ -87,6 +87,7 @@ import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.pagebookmarks.interactor.DeletePageBookmark
 import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
 import tachiyomi.domain.pagebookmarks.interactor.TogglePageBookmark
+import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkChapter
 import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkNote
 import tachiyomi.domain.pagebookmarks.repository.PageBookmarkRepository
 import tachiyomi.domain.release.interactor.GetApplicationRelease
@@ -219,5 +220,6 @@ class DomainModule : InjektModule {
         addFactory { TogglePageBookmark(get()) }
         addFactory { DeletePageBookmark(get()) }
         addFactory { UpdatePageBookmarkNote(get()) }
+        addFactory { UpdatePageBookmarkChapter(get()) }
     }
 }

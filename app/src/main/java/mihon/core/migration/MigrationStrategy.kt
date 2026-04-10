@@ -37,9 +37,16 @@ class InitialMigrationStrategy(private val strategy: DefaultMigrationStrategy) :
     }
 }
 
-class NoopMigrationStrategy(val state: Boolean) : MigrationStrategy {
+class NoopMigrationStrategy(
+    val state: Boolean,
+    private val strategy: DefaultMigrationStrategy,
+) : MigrationStrategy {
 
     override fun invoke(migrations: List<Migration>): Deferred<Boolean> {
+        val alwaysMigrations = migrations.filter { it.isAlways }
+        if (alwaysMigrations.isNotEmpty()) {
+            return strategy(alwaysMigrations)
+        }
         return CompletableDeferred(state)
     }
 }

@@ -89,6 +89,19 @@ class PageBookmarkRepositoryImpl(
         }
     }
 
+    override suspend fun updateChapterAndInfo(id: Long, chapterId: Long, chapterUrl: String, chapterName: String, chapterNumber: Double, scanlator: String?) {
+        withContext(dispatcher) {
+            db.pageBookmarksQueries.updateChapterAndInfo(
+                chapterId = chapterId,
+                chapterUrl = chapterUrl,
+                chapterName = chapterName,
+                chapterNumber = chapterNumber,
+                scanlator = scanlator,
+                id = id,
+            )
+        }
+    }
+
     override suspend fun getAll(): List<PageBookmark> {
         return withContext(dispatcher) {
             db.pageBookmarksQueries.getAll(PageBookmarkMapper::map)

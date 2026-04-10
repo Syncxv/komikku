@@ -23,5 +23,7 @@ interface PageBookmarkRepository {
 
     suspend fun updateNote(id: Long, note: String)
 
+    suspend fun updateChapterAndInfo(id: Long, chapterId: Long, chapterUrl: String, chapterName: String, chapterNumber: Double, scanlator: String?)
+
     suspend fun getAll(): List<PageBookmark>
 }

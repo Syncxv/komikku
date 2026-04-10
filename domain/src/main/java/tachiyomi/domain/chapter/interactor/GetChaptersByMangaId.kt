@@ -17,4 +17,13 @@ class GetChaptersByMangaId(
             emptyList()
         }
     }
+
+    suspend fun subscribe(mangaId: Long, applyFilter: Boolean = false): kotlinx.coroutines.flow.Flow<List<Chapter>> {
+        return try {
+            chapterRepository.getChapterByMangaIdAsFlow(mangaId, applyFilter)
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e)
+            kotlinx.coroutines.flow.emptyFlow()
+        }
+    }
 }

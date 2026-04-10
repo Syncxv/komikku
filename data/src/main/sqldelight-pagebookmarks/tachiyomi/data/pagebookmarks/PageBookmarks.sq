@@ -55,6 +55,11 @@ UPDATE page_bookmarks
 SET note = :note
 WHERE _id = :id;
 
+updateChapterAndInfo:
+UPDATE page_bookmarks
+SET chapter_id = :chapterId, chapter_url = :chapterUrl, chapter_name = :chapterName, chapter_number = :chapterNumber, scanlator = :scanlator
+WHERE _id = :id;
+
 updateChapterInfo:
 UPDATE page_bookmarks
 SET chapter_number = :chapterNumber, scanlator = :scanlator
