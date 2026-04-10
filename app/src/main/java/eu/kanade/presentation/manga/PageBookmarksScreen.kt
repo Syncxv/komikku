@@ -16,8 +16,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.outlined.Book
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -26,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,8 +44,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.items
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
@@ -53,14 +72,7 @@ import java.util.Date
 import java.util.Locale
 
 import tachiyomi.domain.chapter.model.Chapter
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.ui.window.DialogProperties
 
 @Composable
 fun PageBookmarksScreen(
@@ -365,52 +377,131 @@ fun OrphanBookmarksMigrateDialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(usePlatformDefaultWidth = false),
         modifier = Modifier
-            .fillMaxWidth(0.9f)
+            .fillMaxWidth(0.95f)
             .padding(vertical = 16.dp),
         title = {
-            Text(text = "Map Orphaned Bookmarks")
+            Text(
+                text = "Map Orphaned Bookmarks",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Select a new chapter for each bookmark, or use Auto-Match.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+                text = {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                item {
+                    Text(
+                        text = "Select a new chapter for each bookmark, or use Auto-Match.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
-                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                    items(orphans) { orphan ->
-                        var expanded by remember { mutableStateOf(false) }
-                        val selectedChapter = mappings[orphan.id]
-                        val nameText = selectedChapter?.let {
-                            if (it.scanlator.isNullOrBlank()) it.name else "${it.name} [${it.scanlator}]"
-                        } ?: "Select Chapter"
+                items(orphans) { orphan ->
+                    var expanded by remember { mutableStateOf(false) }
+                    val selectedChapter = mappings[orphan.id]
+                    val nameText = selectedChapter?.let {
+                        if (it.scanlator.isNullOrBlank()) it.name else "${it.name} [${it.scanlator}]"
+                    } ?: "Select Chapter"
 
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primaryContainer),
+                    ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp)
+                                .padding(16.dp),
                         ) {
-                            Text(
-                                text = "Bookmark: ${orphan.chapterName} (Page ${orphan.pageIndex + 1})",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                            )
-                            if (orphan.chapterNumber != -1.0) {
-                                Text(
-                                    text = "Saved Number: ${orphan.chapterNumber} | Scanlator: ${orphan.scanlator ?: "Any"}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            } else {
-                                Text(
-                                    text = "No saved chapter number context (Older backup).",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error
-                                )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Page ${orphan.pageIndex + 1} from ${orphan.chapterName}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        if (orphan.chapterNumber != -1.0) {
+                                            Text(
+                                                text = "SAVED: ${orphan.chapterNumber}",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                            )
+                                            Text(
+                                                text = "|",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            )
+                                            Text(
+                                                text = "SCANLATOR: ${orphan.scanlator ?: "Any"}",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Column(
+                                    horizontalAlignment = Alignment.End,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.History,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "ORPHANED",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            letterSpacing = 1.sp
+                                        )
+                                    }
+                                    if (orphan.chapterNumber == -1.0) {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.errorContainer,
+                                            shape = MaterialTheme.shapes.small
+                                        ) {
+                                            Text(
+                                                text = "OLD BACKUP",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
 
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
 
                             ExposedDropdownMenuBox(
                                 expanded = expanded,
@@ -420,12 +511,31 @@ fun OrphanBookmarksMigrateDialog(
                                     value = nameText,
                                     onValueChange = {},
                                     readOnly = true,
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Book,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    },
                                     trailingIcon = {
                                         ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                                     },
-                                    modifier = Modifier.menuAnchor(
-                                        type = androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable
-                                    )
+                                    shape = MaterialTheme.shapes.medium,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor(
+                                            type = androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable
+                                        )
                                 )
 
                                 ExposedDropdownMenu(
@@ -433,7 +543,7 @@ fun OrphanBookmarksMigrateDialog(
                                     onDismissRequest = { expanded = false },
                                 ) {
                                     DropdownMenuItem(
-                                        text = { Text("None") },
+                                        text = { Text("None", color = MaterialTheme.colorScheme.onSurface) },
                                         onClick = {
                                             mappings.remove(orphan.id)
                                             expanded = false
@@ -450,9 +560,7 @@ fun OrphanBookmarksMigrateDialog(
                                     filteredChapters.forEach { chapter ->
                                         val textVal = if (chapter.scanlator.isNullOrBlank()) chapter.name else "${chapter.name} [${chapter.scanlator}]"
                                         DropdownMenuItem(
-                                            text = {
-                                                Text(textVal)
-                                            },
+                                            text = { Text(textVal, color = MaterialTheme.colorScheme.onSurface) },
                                             onClick = {
                                                 mappings[orphan.id] = chapter
                                                 expanded = false
@@ -466,7 +574,7 @@ fun OrphanBookmarksMigrateDialog(
                 }
             }
         },
-        confirmButton = {
+confirmButton = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -482,26 +590,41 @@ fun OrphanBookmarksMigrateDialog(
                         }
                     }
                 ) {
-                    Text(text = "Auto-Match")
+                    Text(
+                        text = "Auto-Match",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-                TextButton(
+                Button(
                     onClick = {
                         onMigrate(mappings)
                         onDismissRequest()
                     },
-                    enabled = mappings.isNotEmpty()
+                    enabled = mappings.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
                 ) {
-                    Text(text = "Migrate")
+                    Text(
+                        text = "Migrate",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismissRequest) {
+            TextButton(
+                onClick = onDismissRequest
+            ) {
                 Text(text = stringResource(MR.strings.action_cancel))
             }
         },
     )
 }
+
+
 
 @Composable
 private fun BookmarkThumbnailTile(
