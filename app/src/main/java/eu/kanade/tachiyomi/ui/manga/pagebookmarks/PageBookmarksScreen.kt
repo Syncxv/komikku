@@ -15,11 +15,12 @@ import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
+import tachiyomi.domain.chapter.interactor.UpdateChapter
+import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.model.Manga
@@ -79,7 +80,8 @@ class PageBookmarksScreen(
         private val updatePageBookmarkChapter: UpdatePageBookmarkChapter = Injekt.get(),
         private val getManga: GetManga = Injekt.get(),
         private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
-    ) : StateScreenModel<State>(State()) {
+        private val updateChapter: UpdateChapter = Injekt.get(),
+) : StateScreenModel<State>(State()) {
 
         private val thumbnailProvider = PageBookmarkThumbnailProvider(context)
         private var manga: Manga? = null
@@ -106,11 +108,15 @@ class PageBookmarksScreen(
                     val validBookmarks = bookmarks.filter { it.chapterId in chapterIds }
                     val orphanedBookmarks = bookmarks.filterNot { it.chapterId in chapterIds }
 
+                    val sortedChapters = manga?.let { currentManga ->
+                        chapters.sortedWith(tachiyomi.domain.chapter.service.getChapterSort(currentManga))
+                    } ?: chapters
+
                     mutableState.update {
                         it.copy(
                             bookmarks = validBookmarks,
                             orphanedBookmarks = orphanedBookmarks,
-                            chapters = chapters,
+                            chapters = sortedChapters,
                             isLoading = false
                         )
                     }
@@ -143,6 +149,12 @@ class PageBookmarksScreen(
                             chapterName = newChapter.name,
                             chapterNumber = newChapter.chapterNumber,
                             scanlator = newChapter.scanlator,
+                        )
+                        updateChapter.await(
+                            ChapterUpdate(
+                                id = newChapter.id,
+                                bookmark = true,
+                            )
                         )
                     }
                 }
