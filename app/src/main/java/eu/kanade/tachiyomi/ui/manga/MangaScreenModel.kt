@@ -75,6 +75,7 @@ import eu.kanade.tachiyomi.util.system.toast
 import exh.debug.DebugToggles
 import exh.eh.EHentaiUpdateHelper
 import exh.log.xLogD
+import exh.log.xLogE
 import exh.md.utils.FollowStatus
 import exh.metadata.metadata.RaisedSearchMetadata
 import exh.metadata.metadata.base.FlatMetadata
@@ -554,8 +555,8 @@ class MangaScreenModel(
                         }
                         val vibrantColor = it.getBestColor() ?: return@launchIO
                         mangaCover.vibrantCoverColor = vibrantColor
-                        updateSuccessState {
-                            it.copy(seedColor = Color(vibrantColor))
+                        updateSuccessState { state ->
+                            state.copy(seedColor = Color(vibrantColor))
                         }
                     }
                 }
@@ -1321,6 +1322,13 @@ class MangaScreenModel(
         return if (manga.sortDescending()) chaptersSorted.reversed() else chaptersSorted
     }
 
+    private fun getBookmarkedChapters(): List<Chapter> {
+        val chapterItems = if (skipFiltered) filteredChapters.orEmpty() else allChapters.orEmpty()
+        return chapterItems
+            .filter { (chapter, dlStatus) -> chapter.bookmark && dlStatus == Download.State.NOT_DOWNLOADED }
+            .map { it.chapter }
+    }
+
     private fun startDownload(
         chapters: List<Chapter>,
         startNow: Boolean,
@@ -1383,6 +1391,7 @@ class MangaScreenModel(
             DownloadAction.NEXT_10_CHAPTERS -> getUnreadChaptersSorted().take(10)
             DownloadAction.NEXT_25_CHAPTERS -> getUnreadChaptersSorted().take(25)
             DownloadAction.UNREAD_CHAPTERS -> getUnreadChapters()
+            DownloadAction.BOOKMARKED_CHAPTERS -> getBookmarkedChapters()
         }
         if (chaptersToDownload.isNotEmpty()) {
             startDownload(chaptersToDownload, false)
@@ -1724,22 +1733,22 @@ class MangaScreenModel(
     fun toggleSelection(
         item: ChapterList.Item,
         selected: Boolean,
-        userSelected: Boolean = false,
         fromLongPress: Boolean = false,
     ) {
         updateSuccessState { successState ->
+            // KMK -->
+            val selectedIndex = successState.processedChapters.indexOfFirst { it.id == item.chapter.id }
+            if (selectedIndex < 0) return@updateSuccessState successState
+            val selectedItem = successState.processedChapters[selectedIndex]
+            if (selectedItem.selected == selected) return@updateSuccessState successState
+            // KMK <--
+
             val newChapters = successState.processedChapters.toMutableList().apply {
-                val selectedIndex = successState.processedChapters.indexOfFirst { it.id == item.chapter.id }
-                if (selectedIndex < 0) return@apply
-
-                val selectedItem = get(selectedIndex)
-                if ((selectedItem.selected && selected) || (!selectedItem.selected && !selected)) return@apply
-
                 val firstSelection = none { it.selected }
                 set(selectedIndex, selectedItem.copy(selected = selected))
                 selectedChapterIds.addOrRemove(item.id, selected)
 
-                if (selected && userSelected && fromLongPress) {
+                if (selected && fromLongPress) {
                     if (firstSelection) {
                         selectedPositions[0] = selectedIndex
                         selectedPositions[1] = selectedIndex
@@ -1758,14 +1767,14 @@ class MangaScreenModel(
                         }
 
                         range.forEach {
-                            val inbetweenItem = get(it)
-                            if (!inbetweenItem.selected) {
-                                selectedChapterIds.add(inbetweenItem.id)
-                                set(it, inbetweenItem.copy(selected = true))
+                            val inBetweenItem = get(it)
+                            if (!inBetweenItem.selected) {
+                                selectedChapterIds.add(inBetweenItem.id)
+                                set(it, inBetweenItem.copy(selected = true))
                             }
                         }
                     }
-                } else if (userSelected && !fromLongPress) {
+                } else if (!fromLongPress) {
                     if (!selected) {
                         if (selectedIndex == selectedPositions[0]) {
                             selectedPositions[0] = indexOfFirst { it.selected }
@@ -1851,7 +1860,7 @@ class MangaScreenModel(
                             }
                             // KMK: auto track MangaDex
                             mdTrack.id !in tracks.map { it.trackerId } -> {
-                                tracks + createMdListTrack()
+                                createMdListTrack()?.let { tracks + it } ?: tracks
                             }
                             else -> tracks
                         }
@@ -1880,21 +1889,27 @@ class MangaScreenModel(
     }
 
     // SY -->
-    private suspend fun createMdListTrack(): Track {
-        val state = successState!!
-        val mdManga = state.manga.takeIf { it.source in mangaDexSourceIds }
-            ?: state.mergedData?.manga?.values?.find { it.source in mangaDexSourceIds }
-            ?: throw IllegalArgumentException("Could not create initial track")
-        val track = trackerManager.mdList.createInitialTracker(state.manga, mdManga)
-            .toDomainTrack(false)!!
-        insertTrack.await(track)
-        /* KMK -->
-        return TrackItem(
-            getTracks.await(mangaId).first { it.trackerId == trackerManager.mdList.id },
-             trackerManager.mdList,
-         )
-        KMK <-- */
-        return getTracks.await(mangaId).first { it.trackerId == trackerManager.mdList.id }
+    private suspend fun createMdListTrack(): Track? {
+        try {
+            val state = successState!!
+            val mdManga = state.manga.takeIf { it.source in mangaDexSourceIds }
+                ?: state.mergedData?.manga?.values?.find { it.source in mangaDexSourceIds }
+                ?: throw IllegalArgumentException("Entry does not belong to MangaDex")
+            val track = trackerManager.mdList.createInitialTracker(state.manga, mdManga)
+                .toDomainTrack(false)
+                ?: throw IllegalStateException("Could not create initial track")
+            insertTrack.await(track)
+            /* KMK -->
+            return TrackItem(
+                getTracks.await(mangaId).first { it.trackerId == trackerManager.mdList.id },
+                 trackerManager.mdList,
+             )
+            KMK <-- */
+            return getTracks.await(mangaId).first { it.trackerId == trackerManager.mdList.id }
+        } catch (e: Exception) {
+            xLogE("Failed to create MangaDex track", e)
+            return null
+        }
     }
     // SY <--
 
