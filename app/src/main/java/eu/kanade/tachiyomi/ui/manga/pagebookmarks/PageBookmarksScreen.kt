@@ -67,6 +67,7 @@ class PageBookmarksScreen(
             page = bookmark.pageIndex,
         ).apply {
             putExtra("scroll_offset", bookmark.scrollOffset)
+            putExtra("chapter_percentage", bookmark.chapterPercentage)
         }
         context.startActivity(intent)
     }

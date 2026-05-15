@@ -1,0 +1,1 @@
+ALTER TABLE page_bookmarks ADD COLUMN chapter_percentage REAL NOT NULL DEFAULT -1.0;

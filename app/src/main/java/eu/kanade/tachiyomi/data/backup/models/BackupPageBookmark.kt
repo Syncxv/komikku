@@ -18,6 +18,7 @@ data class BackupPageBookmark(
     @ProtoNumber(9) var note: String = "",
     @ProtoNumber(10) var chapterNumber: Double = -1.0,
     @ProtoNumber(11) var scanlator: String? = null,
+    @ProtoNumber(12) var chapterPercentage: Double = -1.0,
 ) {
     fun toPageBookmark(mangaId: Long, chapterId: Long, fallbackChapterNumber: Double = -1.0, fallbackScanlator: String? = null): PageBookmark {
         return PageBookmark(
@@ -34,6 +35,7 @@ data class BackupPageBookmark(
             cropBottom = this@BackupPageBookmark.cropBottom,
             addedAt = this@BackupPageBookmark.addedAt,
             note = this@BackupPageBookmark.note,
+            chapterPercentage = this@BackupPageBookmark.chapterPercentage,
         )
     }
 
@@ -51,6 +53,7 @@ data class BackupPageBookmark(
                 cropBottom = bookmark.cropBottom,
                 addedAt = bookmark.addedAt,
                 note = bookmark.note,
+                chapterPercentage = bookmark.chapterPercentage,
             )
         }
     }

@@ -12,7 +12,8 @@ CREATE TABLE page_bookmarks (
     crop_top      REAL    NOT NULL DEFAULT 0.0,
     crop_bottom   REAL    NOT NULL DEFAULT 1.0,
     added_at      INTEGER NOT NULL,
-    note          TEXT    NOT NULL DEFAULT ''
+    note          TEXT    NOT NULL DEFAULT '',
+    chapter_percentage REAL NOT NULL DEFAULT -1.0
 );
 
 getBookmarksForManga:
@@ -27,8 +28,8 @@ FROM page_bookmarks
 WHERE _id = :id;
 
 insert:
-INSERT INTO page_bookmarks(manga_id, chapter_id, chapter_url, chapter_name, chapter_number, scanlator, page_index, scroll_offset, image_url, crop_top, crop_bottom, added_at, note)
-VALUES (:mangaId, :chapterId, :chapterUrl, :chapterName, :chapterNumber, :scanlator, :pageIndex, :scrollOffset, :imageUrl, :cropTop, :cropBottom, :addedAt, :note);
+INSERT INTO page_bookmarks(manga_id, chapter_id, chapter_url, chapter_name, chapter_number, scanlator, page_index, scroll_offset, image_url, crop_top, crop_bottom, added_at, note, chapter_percentage)
+VALUES (:mangaId, :chapterId, :chapterUrl, :chapterName, :chapterNumber, :scanlator, :pageIndex, :scrollOffset, :imageUrl, :cropTop, :cropBottom, :addedAt, :note, :chapterPercentage);
 
 delete:
 DELETE FROM page_bookmarks
@@ -47,7 +48,11 @@ SELECT *
 FROM page_bookmarks
 WHERE manga_id = :mangaId
 AND chapter_id = :chapterId
-AND page_index = :pageIndex
+AND (
+    (chapter_percentage < 0.0 AND page_index = :pageIndex)
+    OR
+    (chapter_percentage >= 0.0 AND ABS(chapter_percentage - :chapterPercentage) < 0.001)
+)
 LIMIT 1;
 
 updateNote:
@@ -63,6 +68,11 @@ WHERE _id = :id;
 updateChapterInfo:
 UPDATE page_bookmarks
 SET chapter_number = :chapterNumber, scanlator = :scanlator
+WHERE _id = :id;
+
+updateChapterPercentage:
+UPDATE page_bookmarks
+SET chapter_percentage = :chapterPercentage
 WHERE _id = :id;
 
 getAll:

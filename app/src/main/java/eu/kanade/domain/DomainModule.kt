@@ -89,6 +89,7 @@ import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
 import tachiyomi.domain.pagebookmarks.interactor.TogglePageBookmark
 import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkChapter
 import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkNote
+import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkPercentage
 import tachiyomi.domain.pagebookmarks.repository.PageBookmarkRepository
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.domain.release.service.ReleaseService
@@ -221,5 +222,6 @@ class DomainModule : InjektModule {
         addFactory { DeletePageBookmark(get()) }
         addFactory { UpdatePageBookmarkNote(get()) }
         addFactory { UpdatePageBookmarkChapter(get()) }
+        addFactory { UpdatePageBookmarkPercentage(get()) }
     }
 }

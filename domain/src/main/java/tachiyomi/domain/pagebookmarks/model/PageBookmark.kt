@@ -15,4 +15,5 @@ data class PageBookmark(
     val cropBottom: Double = 1.0,
     val addedAt: Long = System.currentTimeMillis(),
     val note: String = "",
+    val chapterPercentage: Double = -1.0,
 )

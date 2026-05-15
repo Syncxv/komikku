@@ -258,4 +258,5 @@
     <string name="page_bookmark_images">Page bookmark images</string>
     <string name="page_bookmark_images_restore_pick">Select page bookmark images zip (optional)</string>
     <string name="page_bookmark_images_restore_selected">Page bookmark images zip selected</string>
+    <string name="page_bookmark_precision">Precision: %.1f%%</string>
 </resources>

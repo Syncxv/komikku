@@ -237,6 +237,7 @@ class ReaderActivity : BaseActivity() {
             // SY <--
             // KMK -->
             val scrollOffset = intent.extras?.getDouble("scroll_offset", 0.0).takeUnless { it == 0.0 }
+            val chapterPercentage = intent.extras?.getDouble("chapter_percentage", -1.0).takeUnless { (it ?: -1.0) < 0.0 }
             // KMK <--
             if (manga == -1L || chapter == -1L) {
                 finish()
@@ -245,7 +246,7 @@ class ReaderActivity : BaseActivity() {
             NotificationReceiver.dismissNotification(this, manga.hashCode(), Notifications.ID_NEW_CHAPTERS)
 
             lifecycleScope.launchNonCancellable {
-                val initResult = viewModel.init(manga, chapter/* SY --> */, page/* SY <-- *//* KMK --> */, scrollOffset/* KMK <-- */)
+                val initResult = viewModel.init(manga, chapter/* SY --> */, page/* SY <-- *//* KMK --> */, scrollOffset, chapterPercentage/* KMK <-- */)
                 if (!initResult.getOrDefault(false)) {
                     val exception = initResult.exceptionOrNull() ?: IllegalStateException("Unknown err")
                     withUIContext {

@@ -18,6 +18,7 @@ class TogglePageBookmark(
             mangaId = bookmark.mangaId,
             chapterId = bookmark.chapterId,
             pageIndex = bookmark.pageIndex,
+            chapterPercentage = bookmark.chapterPercentage,
         )
         return if (existing != null) {
             repository.delete(existing.id)

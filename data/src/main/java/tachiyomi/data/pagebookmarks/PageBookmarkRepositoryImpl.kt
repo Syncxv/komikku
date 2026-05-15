@@ -34,12 +34,13 @@ class PageBookmarkRepositoryImpl(
         }
     }
 
-    override suspend fun findExisting(mangaId: Long, chapterId: Long, pageIndex: Int): PageBookmark? {
+    override suspend fun findExisting(mangaId: Long, chapterId: Long, pageIndex: Int, chapterPercentage: Double): PageBookmark? {
         return withContext(dispatcher) {
             db.pageBookmarksQueries.findExisting(
                 mangaId = mangaId,
                 chapterId = chapterId,
                 pageIndex = pageIndex.toLong(),
+                chapterPercentage = chapterPercentage,
                 mapper = PageBookmarkMapper::map,
             ).executeAsOneOrNull()
         }
@@ -61,6 +62,7 @@ class PageBookmarkRepositoryImpl(
                 cropBottom = bookmark.cropBottom,
                 addedAt = bookmark.addedAt,
                 note = bookmark.note,
+                chapterPercentage = bookmark.chapterPercentage,
             )
         }
     }
@@ -97,6 +99,15 @@ class PageBookmarkRepositoryImpl(
                 chapterName = chapterName,
                 chapterNumber = chapterNumber,
                 scanlator = scanlator,
+                id = id,
+            )
+        }
+    }
+
+    override suspend fun updateChapterPercentage(id: Long, chapterPercentage: Double) {
+        withContext(dispatcher) {
+            db.pageBookmarksQueries.updateChapterPercentage(
+                chapterPercentage = chapterPercentage,
                 id = id,
             )
         }

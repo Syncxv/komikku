@@ -18,6 +18,7 @@ object PageBookmarkMapper {
         cropBottom: Double,
         addedAt: Long,
         note: String,
+        chapterPercentage: Double,
     ): PageBookmark = PageBookmark(
         id = id,
         mangaId = mangaId,
@@ -33,5 +34,6 @@ object PageBookmarkMapper {
         cropBottom = cropBottom,
         addedAt = addedAt,
         note = note,
+        chapterPercentage = chapterPercentage,
     )
 }

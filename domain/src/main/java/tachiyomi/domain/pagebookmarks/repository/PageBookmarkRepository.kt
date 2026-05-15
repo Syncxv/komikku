@@ -11,7 +11,7 @@ interface PageBookmarkRepository {
 
     suspend fun getBookmark(id: Long): PageBookmark?
 
-    suspend fun findExisting(mangaId: Long, chapterId: Long, pageIndex: Int): PageBookmark?
+    suspend fun findExisting(mangaId: Long, chapterId: Long, pageIndex: Int, chapterPercentage: Double): PageBookmark?
 
     suspend fun insert(bookmark: PageBookmark)
 
@@ -24,6 +24,8 @@ interface PageBookmarkRepository {
     suspend fun updateNote(id: Long, note: String)
 
     suspend fun updateChapterAndInfo(id: Long, chapterId: Long, chapterUrl: String, chapterName: String, chapterNumber: Double, scanlator: String?)
+
+    suspend fun updateChapterPercentage(id: Long, chapterPercentage: Double)
 
     suspend fun getAll(): List<PageBookmark>
 }

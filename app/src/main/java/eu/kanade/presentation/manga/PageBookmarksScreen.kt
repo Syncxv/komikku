@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,13 +46,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import coil3.compose.AsyncImage
@@ -259,11 +262,6 @@ fun PageBookmarksScreen(
                     )
                     Text(
                         text = stringResource(KMR.strings.page_bookmark_chapter_page, bookmark.pageIndex + 1),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = stringResource(KMR.strings.page_bookmark_added_on, formatDate(bookmark.addedAt)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -647,14 +645,40 @@ private fun BookmarkThumbnailTile(
     ) {
         if (thumbFile != null) {
             val context = LocalPlatformContext.current
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(thumbFile)
-                    .build(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxWidth(),
-                contentScale = ContentScale.FillWidth,
-            )
+            Box {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(thumbFile)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.FillWidth,
+                )
+                if (bookmark.chapterPercentage >= 0.0) {
+                    val color = MaterialTheme.colorScheme.primary
+                    val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(modifier = Modifier.size(12.dp)) {
+                            drawCircle(
+                                color = trackColor,
+                                style = Stroke(width = 2.dp.toPx())
+                            )
+                            drawArc(
+                                color = color,
+                                startAngle = -90f,
+                                sweepAngle = (bookmark.chapterPercentage * 360).toFloat(),
+                                useCenter = false,
+                                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                            )
+                        }
+                    }
+                }
+            }
         } else {
             Box(
                 modifier = Modifier

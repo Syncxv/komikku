@@ -58,6 +58,7 @@ import exh.source.getMainSource
 import exh.source.isEhBasedManga
 import exh.util.defaultReaderType
 import exh.util.mangaType
+import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -104,6 +105,7 @@ import tachiyomi.domain.manga.interactor.GetMergedReferencesById
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
 import tachiyomi.domain.pagebookmarks.interactor.TogglePageBookmark
+import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkPercentage
 import tachiyomi.domain.pagebookmarks.model.PageBookmark
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.source.local.isLocal
@@ -146,6 +148,7 @@ class ReaderViewModel @JvmOverloads constructor(
     // KMK -->
     private val togglePageBookmark: TogglePageBookmark = Injekt.get(),
     private val getPageBookmarks: GetPageBookmarks = Injekt.get(),
+    private val updatePageBookmarkPercentage: UpdatePageBookmarkPercentage = Injekt.get(),
     // KMK <--
 ) : ViewModel() {
 
@@ -424,7 +427,7 @@ class ReaderViewModel @JvmOverloads constructor(
      * Initializes this presenter with the given [mangaId] and [initialChapterId]. This method will
      * fetch the manga from the database and initialize the initial chapter.
      */
-    suspend fun init(mangaId: Long, initialChapterId: Long /* SY --> */, page: Int?/* SY <-- *//* KMK --> */, scrollOffset: Double? = null/* KMK <-- */): Result<Boolean> {
+    suspend fun init(mangaId: Long, initialChapterId: Long /* SY --> */, page: Int?/* SY <-- *//* KMK --> */, scrollOffset: Double? = null, chapterPercentage: Double? = null/* KMK <-- */): Result<Boolean> {
         if (!needsInit()) return Result.success(true)
         return withIOContext {
             try {
@@ -498,6 +501,9 @@ class ReaderViewModel @JvmOverloads constructor(
                     if (scrollOffset != null && scrollOffset != 0.0) {
                         mutableState.update { it.copy(pendingScrollOffset = scrollOffset) }
                     }
+                    if (chapterPercentage != null && chapterPercentage >= 0.0) {
+                        mutableState.update { it.copy(pendingChapterPercentage = chapterPercentage) }
+                    }
                     // KMK <--
 
                     loadChapter(
@@ -559,6 +565,16 @@ class ReaderViewModel @JvmOverloads constructor(
         // Map original page and scroll offset to split page and split scroll offset
         val pages = chapter.pages
         if (pages != null && pages.isNotEmpty()) {
+            val pendingPercentage = state.value.pendingChapterPercentage
+            if (pendingPercentage != null) {
+                mutableState.update { it.copy(pendingChapterPercentage = null) }
+                val targetFraction = pendingPercentage * pages.size
+                val requestedIndex = targetFraction.toInt().coerceIn(0, pages.lastIndex)
+                chapter.requestedPage = requestedIndex
+                val targetScrollOffset = targetFraction - requestedIndex
+                mutableState.update { it.copy(pendingScrollOffset = targetScrollOffset) }
+            }
+
             val originalIndex = chapter.requestedPage
             val originalScrollOffset = state.value.pendingScrollOffset
 
@@ -1120,6 +1136,9 @@ class ReaderViewModel @JvmOverloads constructor(
 
         val originalInfo = getOriginalPageInfo(page, scrollOffset, cropTop, cropBottom)
 
+        val totalPages = state.value.currentChapter?.pages?.size?.toDouble() ?: 1.0
+        val chapterPercentage = ((originalInfo.index + originalInfo.scrollOffset).coerceIn(0.0, totalPages) / totalPages).coerceIn(0.0, 1.0)
+
         val bookmark = PageBookmark(
             mangaId = manga.id,
             chapterId = chapter.id!!,
@@ -1133,6 +1152,7 @@ class ReaderViewModel @JvmOverloads constructor(
             cropTop = originalInfo.cropTop,
             cropBottom = originalInfo.cropBottom,
             addedAt = System.currentTimeMillis(),
+            chapterPercentage = chapterPercentage,
         )
 
         // Capture a screenshot of the current view to use as the thumbnail
@@ -1185,10 +1205,29 @@ class ReaderViewModel @JvmOverloads constructor(
         val chapter = page.chapter.chapter
         val originalInfo = getOriginalPageInfo(page, 0.0, 0.0, 1.0)
         viewModelScope.launchIO {
-            val existing = getPageBookmarks.awaitForManga(manga.id).any {
-                it.chapterId == chapter.id && it.pageIndex == originalInfo.index
+            val totalPages = page.chapter.pages?.size?.toDouble() ?: 1.0
+            val currentPagePercentage = ((originalInfo.index + originalInfo.scrollOffset).coerceIn(0.0, totalPages) / totalPages).coerceIn(0.0, 1.0)
+
+            val existing = getPageBookmarks.awaitForManga(manga.id).find {
+                if (it.chapterId != chapter.id) return@find false
+
+                // If it's a legacy bookmark without percentage, fall back to page index match
+                if (it.chapterPercentage < 0.0) {
+                    it.pageIndex == originalInfo.index
+                } else {
+                    // Match if within 0.1% of the chapter (roughly within a single long page view)
+                    kotlin.math.abs(it.chapterPercentage - currentPagePercentage) < 0.001
+                }
             }
-            mutableState.update { it.copy(isCurrentPageBookmarked = existing) }
+            if (existing != null) {
+                val expectedPercentage = ((existing.pageIndex + existing.scrollOffset).coerceIn(0.0, totalPages) / totalPages).coerceIn(0.0, 1.0)
+                val brokenPercentage = (existing.pageIndex / totalPages).coerceIn(0.0, 1.0)
+
+                if (existing.chapterPercentage < 0.0 || (existing.scrollOffset > 0.0 && abs(existing.chapterPercentage - brokenPercentage) < 0.0001)) {
+                    updatePageBookmarkPercentage.await(existing.id, expectedPercentage)
+                }
+            }
+            mutableState.update { it.copy(isCurrentPageBookmarked = existing != null) }
         }
     }
 
@@ -1696,6 +1735,7 @@ class ReaderViewModel @JvmOverloads constructor(
         // KMK -->
         val isCurrentPageBookmarked: Boolean = false,
         val pendingScrollOffset: Double? = null,
+        val pendingChapterPercentage: Double? = null,
         // KMK <--
 
         /**
