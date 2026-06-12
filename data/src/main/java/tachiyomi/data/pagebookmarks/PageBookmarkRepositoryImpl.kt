@@ -116,6 +116,15 @@ class PageBookmarkRepositoryImpl(
         }
     }
 
+    override suspend fun backfillChapterPercentages(chapterId: Long, pageCount: Int) {
+        withContext(dispatcher) {
+            db.pageBookmarksQueries.backfillChapterPercentages(
+                pageCount = pageCount.toDouble(),
+                chapterId = chapterId,
+            )
+        }
+    }
+
     override suspend fun updateMangaAndChapterInfo(id: Long, newMangaId: Long, chapterId: Long, chapterUrl: String, chapterName: String, chapterNumber: Double, scanlator: String?) {
         withContext(dispatcher) {
             db.pageBookmarksQueries.updateMangaAndChapterInfo(

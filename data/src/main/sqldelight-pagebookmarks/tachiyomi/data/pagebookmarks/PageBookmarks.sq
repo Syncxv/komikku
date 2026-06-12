@@ -87,3 +87,8 @@ WHERE _id = :id;
 
 selectLastInsertedRowId:
 SELECT last_insert_rowid();
+
+backfillChapterPercentages:
+UPDATE page_bookmarks
+SET chapter_percentage = MIN(1.0, MAX(0.0, (page_index + scroll_offset) / :pageCount))
+WHERE chapter_id = :chapterId AND chapter_percentage < 0.0;

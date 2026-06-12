@@ -565,6 +565,14 @@ class ReaderViewModel @JvmOverloads constructor(
         // Map original page and scroll offset to split page and split scroll offset
         val pages = chapter.pages
         if (pages != null && pages.isNotEmpty()) {
+            // KMK -->
+            // Now that the page count is known, backfill any legacy bookmarks (percentage < 0) for
+            // this chapter in one pass, instead of waiting for the user to scroll past each page.
+            chapter.chapter.id?.let { chapterId ->
+                updatePageBookmarkPercentage.awaitBackfillForChapter(chapterId, pages.size)
+            }
+            // KMK <--
+
             val pendingPercentage = state.value.pendingChapterPercentage
             if (pendingPercentage != null) {
                 mutableState.update { it.copy(pendingChapterPercentage = null) }

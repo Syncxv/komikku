@@ -61,6 +61,7 @@ import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkPercentage
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.i18n.MR
@@ -88,6 +89,9 @@ class Downloader(
     // SY -->
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     // SY <--
+    // KMK -->
+    private val updatePageBookmarkPercentage: UpdatePageBookmarkPercentage = Injekt.get(),
+    // KMK <--
 ) {
 
     /**
@@ -448,6 +452,13 @@ class Downloader(
             DiskUtil.createNoMediaFile(tmpDir, context)
 
             download.status = Download.State.DOWNLOADED
+
+            // KMK -->
+            // Backfill legacy page-bookmark percentages now that the chapter's page count is known.
+            download.pages?.size?.let { pageCount ->
+                updatePageBookmarkPercentage.awaitBackfillForChapter(download.chapter.id, pageCount)
+            }
+            // KMK <--
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
             // If the page list threw, it will resume here

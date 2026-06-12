@@ -27,6 +27,9 @@ interface PageBookmarkRepository {
 
     suspend fun updateChapterPercentage(id: Long, chapterPercentage: Double)
 
+    /** Backfills [chapterPercentage] for legacy bookmarks (percentage < 0) in a chapter, given its page count. */
+    suspend fun backfillChapterPercentages(chapterId: Long, pageCount: Int)
+
     suspend fun updateMangaAndChapterInfo(id: Long, newMangaId: Long, chapterId: Long, chapterUrl: String, chapterName: String, chapterNumber: Double, scanlator: String?)
 
     suspend fun getAll(): List<PageBookmark>
