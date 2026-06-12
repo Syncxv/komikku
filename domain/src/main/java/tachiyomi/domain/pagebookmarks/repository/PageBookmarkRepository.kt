@@ -13,7 +13,7 @@ interface PageBookmarkRepository {
 
     suspend fun findExisting(mangaId: Long, chapterId: Long, pageIndex: Int, chapterPercentage: Double): PageBookmark?
 
-    suspend fun insert(bookmark: PageBookmark)
+    suspend fun insert(bookmark: PageBookmark): Long
 
     suspend fun delete(id: Long)
 

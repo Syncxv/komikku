@@ -29,4 +29,30 @@ class UpdatePageBookmarkChapter(
     ) {
         repository.updateMangaAndChapterInfo(id, newMangaId, chapterId, chapterUrl, chapterName, chapterNumber, scanlator)
     }
+
+    /**
+     * Inserts a copy of [source] re-pointed at another manga/chapter, leaving the original intact.
+     * Used by migration's "Copy" path so the source manga keeps its own bookmarks.
+     */
+    suspend fun awaitCopyToMangaAndChapter(
+        source: PageBookmark,
+        newMangaId: Long,
+        chapterId: Long,
+        chapterUrl: String,
+        chapterName: String,
+        chapterNumber: Double,
+        scanlator: String?,
+    ): Long {
+        return repository.insert(
+            source.copy(
+                id = 0,
+                mangaId = newMangaId,
+                chapterId = chapterId,
+                chapterUrl = chapterUrl,
+                chapterName = chapterName,
+                chapterNumber = chapterNumber,
+                scanlator = scanlator,
+            ),
+        )
+    }
 }

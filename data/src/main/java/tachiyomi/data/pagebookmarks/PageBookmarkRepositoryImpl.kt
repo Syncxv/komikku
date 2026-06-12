@@ -46,24 +46,27 @@ class PageBookmarkRepositoryImpl(
         }
     }
 
-    override suspend fun insert(bookmark: PageBookmark) {
-        withContext(dispatcher) {
-            db.pageBookmarksQueries.insert(
-                mangaId = bookmark.mangaId,
-                chapterId = bookmark.chapterId,
-                chapterUrl = bookmark.chapterUrl,
-                chapterName = bookmark.chapterName,
-                chapterNumber = bookmark.chapterNumber,
-                scanlator = bookmark.scanlator,
-                pageIndex = bookmark.pageIndex.toLong(),
-                scrollOffset = bookmark.scrollOffset,
-                imageUrl = bookmark.imageUrl,
-                cropTop = bookmark.cropTop,
-                cropBottom = bookmark.cropBottom,
-                addedAt = bookmark.addedAt,
-                note = bookmark.note,
-                chapterPercentage = bookmark.chapterPercentage,
-            )
+    override suspend fun insert(bookmark: PageBookmark): Long {
+        return withContext(dispatcher) {
+            db.pageBookmarksQueries.transactionWithResult {
+                db.pageBookmarksQueries.insert(
+                    mangaId = bookmark.mangaId,
+                    chapterId = bookmark.chapterId,
+                    chapterUrl = bookmark.chapterUrl,
+                    chapterName = bookmark.chapterName,
+                    chapterNumber = bookmark.chapterNumber,
+                    scanlator = bookmark.scanlator,
+                    pageIndex = bookmark.pageIndex.toLong(),
+                    scrollOffset = bookmark.scrollOffset,
+                    imageUrl = bookmark.imageUrl,
+                    cropTop = bookmark.cropTop,
+                    cropBottom = bookmark.cropBottom,
+                    addedAt = bookmark.addedAt,
+                    note = bookmark.note,
+                    chapterPercentage = bookmark.chapterPercentage,
+                )
+                db.pageBookmarksQueries.selectLastInsertedRowId().executeAsOne()
+            }
         }
     }
 

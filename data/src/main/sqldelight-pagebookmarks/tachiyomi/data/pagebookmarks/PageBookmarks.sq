@@ -84,3 +84,6 @@ updateMangaAndChapterInfo:
 UPDATE page_bookmarks
 SET manga_id = :newMangaId, chapter_id = :chapterId, chapter_url = :chapterUrl, chapter_name = :chapterName, chapter_number = :chapterNumber, scanlator = :scanlator
 WHERE _id = :id;
+
+selectLastInsertedRowId:
+SELECT last_insert_rowid();

@@ -7,8 +7,11 @@ import eu.kanade.domain.manga.model.toSManga
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
+import android.app.Application
+import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.ui.manga.pagebookmarks.PageBookmarkThumbnailProvider
 import kotlinx.coroutines.CancellationException
 import logcat.LogPriority
 import mihon.domain.migration.models.MigrationFlag
@@ -16,6 +19,7 @@ import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.UpdateChapter
+import tachiyomi.domain.chapter.model.ChapterUpdate
 import tachiyomi.domain.chapter.model.toChapterUpdate
 import tachiyomi.domain.history.interactor.GetHistory
 import tachiyomi.domain.history.interactor.UpsertHistory
@@ -51,9 +55,14 @@ class MigrateMangaUseCase(
     private val getPageBookmarks: GetPageBookmarks,
     private val updatePageBookmarkChapter: UpdatePageBookmarkChapter,
     private val deletePageBookmark: DeletePageBookmark,
+    private val context: Application,
     // KMK <--
 ) {
     private val enhancedServices by lazy { trackerManager.trackers.filterIsInstance<EnhancedTracker>() }
+
+    // KMK -->
+    private val pageBookmarkThumbnailProvider by lazy { PageBookmarkThumbnailProvider(context) }
+    // KMK <--
 
     suspend operator fun invoke(
         current: Manga,
@@ -185,6 +194,11 @@ class MigrateMangaUseCase(
                     val targetChapters = getChaptersByMangaId.await(target.id)
                     var migratedCount = 0
                     var orphanedCount = 0
+                    var duplicateCount = 0
+                    // Track which (chapter, page/percentage) slots the target already has so we don't
+                    // create duplicate bookmarks. Mirrors PageBookmarks.sq `findExisting` matching.
+                    val takenSlots = getPageBookmarks.awaitForManga(target.id)
+                        .mapTo(mutableSetOf()) { bookmarkSlotKey(it.chapterId, it.pageIndex, it.chapterPercentage) }
                     for (bookmark in bookmarks) {
                         val matchedChapter = if (bookmark.chapterNumber >= 0.0) {
                             val candidates = targetChapters.filter {
@@ -200,48 +214,77 @@ class MigrateMangaUseCase(
                             null
                         }
 
-                        if (matchedChapter != null) {
+                        // A matched bookmark re-points to the target's chapter; an unmatched one keeps
+                        // its original chapter info so it surfaces as an orphan on the target manga.
+                        val chapterId = matchedChapter?.id ?: bookmark.chapterId
+                        val chapterUrl = matchedChapter?.url ?: bookmark.chapterUrl
+                        val chapterName = matchedChapter?.name ?: bookmark.chapterName
+                        val chapterNumber = matchedChapter?.chapterNumber ?: bookmark.chapterNumber
+                        val scanlator = matchedChapter?.scanlator ?: bookmark.scanlator
+
+                        // Skip if the target already has a bookmark in this slot (from a prior
+                        // migration or its own bookmarking); avoids piling up duplicates.
+                        val slotKey = bookmarkSlotKey(chapterId, bookmark.pageIndex, bookmark.chapterPercentage)
+                        if (!takenSlots.add(slotKey)) {
                             logcat(LogPriority.DEBUG, tag = "PageBookmarkMigration") {
-                                "Migrating bookmark id=${bookmark.id}: ch ${bookmark.chapterNumber} -> matched ch ${matchedChapter.chapterNumber} (chapterId=${matchedChapter.id})"
+                                "Skipping duplicate bookmark id=${bookmark.id}: target already has slot $slotKey"
                             }
-                            updatePageBookmarkChapter.awaitMangaAndChapter(
-                                id = bookmark.id,
-                                newMangaId = target.id,
-                                chapterId = matchedChapter.id,
-                                chapterUrl = matchedChapter.url,
-                                chapterName = matchedChapter.name,
-                                chapterNumber = matchedChapter.chapterNumber,
-                                scanlator = matchedChapter.scanlator,
-                            )
-                            migratedCount++
-                        } else {
-                            logcat(LogPriority.DEBUG, tag = "PageBookmarkMigration") {
+                            // On replace the source manga is going away, so drop the redundant row.
+                            if (replace) deletePageBookmark.awaitById(bookmark.id)
+                            duplicateCount++
+                            continue
+                        }
+
+                        logcat(LogPriority.DEBUG, tag = "PageBookmarkMigration") {
+                            if (matchedChapter != null) {
+                                "Migrating bookmark id=${bookmark.id}: ch ${bookmark.chapterNumber} -> matched ch ${matchedChapter.chapterNumber} (chapterId=${matchedChapter.id})"
+                            } else {
                                 "Orphaning bookmark id=${bookmark.id}: ch ${bookmark.chapterNumber} '${bookmark.chapterName}' - no match on target manga"
                             }
+                        }
+
+                        if (replace) {
+                            // Move the existing bookmark onto the target manga.
                             updatePageBookmarkChapter.awaitMangaAndChapter(
                                 id = bookmark.id,
                                 newMangaId = target.id,
-                                chapterId = bookmark.chapterId,
-                                chapterUrl = bookmark.chapterUrl,
-                                chapterName = bookmark.chapterName,
-                                chapterNumber = bookmark.chapterNumber,
-                                scanlator = bookmark.scanlator,
+                                chapterId = chapterId,
+                                chapterUrl = chapterUrl,
+                                chapterName = chapterName,
+                                chapterNumber = chapterNumber,
+                                scanlator = scanlator,
                             )
+                        } else {
+                            // Copy the bookmark so the source manga keeps its own.
+                            val newBookmarkId = updatePageBookmarkChapter.awaitCopyToMangaAndChapter(
+                                source = bookmark,
+                                newMangaId = target.id,
+                                chapterId = chapterId,
+                                chapterUrl = chapterUrl,
+                                chapterName = chapterName,
+                                chapterNumber = chapterNumber,
+                                scanlator = scanlator,
+                            )
+                            // Thumbnails are keyed by bookmark id, so carry the cached image to the copy
+                            // (the target manga isn't downloaded, so it can't be regenerated otherwise).
+                            pageBookmarkThumbnailProvider.copyThumbnail(bookmark.id, newBookmarkId)
+                        }
+
+                        if (matchedChapter != null) {
+                            // Mirror the manual remap flow: flag the target chapter as bookmarked.
+                            updateChapter.await(ChapterUpdate(id = matchedChapter.id, bookmark = true))
+                            migratedCount++
+                        } else {
                             orphanedCount++
                         }
                     }
 
-                    if (replace && current.id != target.id) {
-                        logcat(LogPriority.DEBUG, tag = "PageBookmarkMigration") {
-                            "Deleting old manga bookmarks (replace=true, mangaId=${current.id})"
+                    if (BuildConfig.DEBUG) {
+                        val finalBookmarks = getPageBookmarks.awaitForManga(target.id)
+                        logcat(LogPriority.INFO, tag = "PageBookmarkMigration") {
+                            "Migration complete: $migratedCount migrated, $orphanedCount orphaned, " +
+                                "$duplicateCount skipped. Target manga now has ${finalBookmarks.size} bookmarks"
                         }
-                        deletePageBookmark.awaitByManga(current.id)
-                    }
-
-                    val finalBookmarks = getPageBookmarks.awaitForManga(target.id)
-                    logcat(LogPriority.INFO, tag = "PageBookmarkMigration") {
-                        "Migration complete: $migratedCount migrated, $orphanedCount orphaned. " +
-                            "Target manga now has ${finalBookmarks.size} bookmarks (expected ${bookmarks.size})"
                     }
                 }
             }
@@ -275,4 +318,18 @@ class MigrateMangaUseCase(
             }
         }
     }
+
+    // KMK -->
+    /**
+     * Identifies a page-bookmark "slot" for dedup. Percentage-based bookmarks bucket to the
+     * nearest 0.001 (matching `findExisting`'s tolerance); older page-based ones key on page index.
+     */
+    private fun bookmarkSlotKey(chapterId: Long, pageIndex: Int, chapterPercentage: Double): String {
+        return if (chapterPercentage >= 0.0) {
+            "$chapterId:pct:${Math.round(chapterPercentage * 1000)}"
+        } else {
+            "$chapterId:page:$pageIndex"
+        }
+    }
+    // KMK <--
 }

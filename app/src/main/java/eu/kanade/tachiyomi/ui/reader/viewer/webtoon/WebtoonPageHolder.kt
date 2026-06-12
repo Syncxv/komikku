@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.ui.reader.viewer.webtoon
 
 import android.content.res.Resources
 import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -260,7 +259,7 @@ class WebtoonPageHolder(
      * Called when the image is decoded and going to be displayed.
      */
     private fun onImageDecoded() {
-        progressContainer.visibility = View.GONE
+        progressContainer.isVisible = false
         removeErrorLayout()
     }
 

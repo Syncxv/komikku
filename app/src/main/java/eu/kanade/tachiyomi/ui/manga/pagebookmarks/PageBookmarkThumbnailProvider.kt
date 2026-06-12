@@ -217,6 +217,17 @@ class PageBookmarkThumbnailProvider(
     }
 
     /**
+     * Copy a cached thumbnail to a new bookmark id (e.g. when a bookmark is copied during migration).
+     * No-op if the source thumbnail doesn't exist.
+     */
+    fun copyThumbnail(fromBookmarkId: Long, toBookmarkId: Long) {
+        val source = File(thumbDir, "$fromBookmarkId.webp")
+        if (source.exists() && source.length() > 0) {
+            source.copyTo(File(thumbDir, "$toBookmarkId.webp"), overwrite = true)
+        }
+    }
+
+    /**
      * Delete the cached thumbnail for a bookmark.
      */
     fun deleteThumbnail(bookmarkId: Long) {
