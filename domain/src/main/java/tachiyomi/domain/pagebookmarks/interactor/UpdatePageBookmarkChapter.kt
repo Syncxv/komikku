@@ -17,4 +17,16 @@ class UpdatePageBookmarkChapter(
     ) {
         repository.updateChapterAndInfo(id, chapterId, chapterUrl, chapterName, chapterNumber, scanlator)
     }
+
+    suspend fun awaitMangaAndChapter(
+        id: Long,
+        newMangaId: Long,
+        chapterId: Long,
+        chapterUrl: String,
+        chapterName: String,
+        chapterNumber: Double,
+        scanlator: String?,
+    ) {
+        repository.updateMangaAndChapterInfo(id, newMangaId, chapterId, chapterUrl, chapterName, chapterNumber, scanlator)
+    }
 }

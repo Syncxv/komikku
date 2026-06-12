@@ -15,6 +15,7 @@ enum class MigrationFlag(val flag: Int) {
 
     // KMK -->
     EXTRA(0b1000000),
+    PAGE_BOOKMARKS(0b10000000),
     // KMK <--
     ;
 

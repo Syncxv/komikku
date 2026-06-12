@@ -113,6 +113,20 @@ class PageBookmarkRepositoryImpl(
         }
     }
 
+    override suspend fun updateMangaAndChapterInfo(id: Long, newMangaId: Long, chapterId: Long, chapterUrl: String, chapterName: String, chapterNumber: Double, scanlator: String?) {
+        withContext(dispatcher) {
+            db.pageBookmarksQueries.updateMangaAndChapterInfo(
+                newMangaId = newMangaId,
+                chapterId = chapterId,
+                chapterUrl = chapterUrl,
+                chapterName = chapterName,
+                chapterNumber = chapterNumber,
+                scanlator = scanlator,
+                id = id,
+            )
+        }
+    }
+
     override suspend fun getAll(): List<PageBookmark> {
         return withContext(dispatcher) {
             db.pageBookmarksQueries.getAll(PageBookmarkMapper::map)

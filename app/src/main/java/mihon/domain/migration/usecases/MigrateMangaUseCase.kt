@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import kotlinx.coroutines.CancellationException
+import logcat.LogPriority
 import mihon.domain.migration.models.MigrationFlag
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
@@ -21,9 +22,13 @@ import tachiyomi.domain.history.interactor.UpsertHistory
 import tachiyomi.domain.history.model.HistoryUpdate
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
+import tachiyomi.domain.pagebookmarks.interactor.DeletePageBookmark
+import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
+import tachiyomi.domain.pagebookmarks.interactor.UpdatePageBookmarkChapter
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
+import tachiyomi.core.common.util.system.logcat
 import java.time.Instant
 
 class MigrateMangaUseCase(
@@ -43,6 +48,9 @@ class MigrateMangaUseCase(
     // KMK -->
     private val getHistory: GetHistory,
     private val upsertHistory: UpsertHistory,
+    private val getPageBookmarks: GetPageBookmarks,
+    private val updatePageBookmarkChapter: UpdatePageBookmarkChapter,
+    private val deletePageBookmark: DeletePageBookmark,
     // KMK <--
 ) {
     private val enhancedServices by lazy { trackerManager.trackers.filterIsInstance<EnhancedTracker>() }
@@ -165,6 +173,79 @@ class MigrateMangaUseCase(
             if (MigrationFlag.CUSTOM_COVER in flags && current.hasCustomCover()) {
                 coverCache.setCustomCoverToCache(target, coverCache.getCustomCoverFile(current.id).inputStream())
             }
+
+            // KMK -->
+            // Migrate page bookmarks
+            if (MigrationFlag.PAGE_BOOKMARKS in flags) {
+                val bookmarks = getPageBookmarks.awaitForManga(current.id)
+                logcat(LogPriority.INFO, tag = "PageBookmarkMigration") {
+                    "Expected bookmarks to migrate: ${bookmarks.size} (mangaId=${current.id})"
+                }
+                if (bookmarks.isNotEmpty()) {
+                    val targetChapters = getChaptersByMangaId.await(target.id)
+                    var migratedCount = 0
+                    var orphanedCount = 0
+                    for (bookmark in bookmarks) {
+                        val matchedChapter = if (bookmark.chapterNumber >= 0.0) {
+                            val candidates = targetChapters.filter {
+                                it.isRecognizedNumber && it.chapterNumber == bookmark.chapterNumber
+                            }
+                            when {
+                                candidates.size == 1 -> candidates.first()
+                                candidates.size > 1 -> candidates.find { it.scanlator == bookmark.scanlator }
+                                    ?: candidates.firstOrNull()
+                                else -> null
+                            }
+                        } else {
+                            null
+                        }
+
+                        if (matchedChapter != null) {
+                            logcat(LogPriority.DEBUG, tag = "PageBookmarkMigration") {
+                                "Migrating bookmark id=${bookmark.id}: ch ${bookmark.chapterNumber} -> matched ch ${matchedChapter.chapterNumber} (chapterId=${matchedChapter.id})"
+                            }
+                            updatePageBookmarkChapter.awaitMangaAndChapter(
+                                id = bookmark.id,
+                                newMangaId = target.id,
+                                chapterId = matchedChapter.id,
+                                chapterUrl = matchedChapter.url,
+                                chapterName = matchedChapter.name,
+                                chapterNumber = matchedChapter.chapterNumber,
+                                scanlator = matchedChapter.scanlator,
+                            )
+                            migratedCount++
+                        } else {
+                            logcat(LogPriority.DEBUG, tag = "PageBookmarkMigration") {
+                                "Orphaning bookmark id=${bookmark.id}: ch ${bookmark.chapterNumber} '${bookmark.chapterName}' - no match on target manga"
+                            }
+                            updatePageBookmarkChapter.awaitMangaAndChapter(
+                                id = bookmark.id,
+                                newMangaId = target.id,
+                                chapterId = bookmark.chapterId,
+                                chapterUrl = bookmark.chapterUrl,
+                                chapterName = bookmark.chapterName,
+                                chapterNumber = bookmark.chapterNumber,
+                                scanlator = bookmark.scanlator,
+                            )
+                            orphanedCount++
+                        }
+                    }
+
+                    if (replace && current.id != target.id) {
+                        logcat(LogPriority.DEBUG, tag = "PageBookmarkMigration") {
+                            "Deleting old manga bookmarks (replace=true, mangaId=${current.id})"
+                        }
+                        deletePageBookmark.awaitByManga(current.id)
+                    }
+
+                    val finalBookmarks = getPageBookmarks.awaitForManga(target.id)
+                    logcat(LogPriority.INFO, tag = "PageBookmarkMigration") {
+                        "Migration complete: $migratedCount migrated, $orphanedCount orphaned. " +
+                            "Target manga now has ${finalBookmarks.size} bookmarks (expected ${bookmarks.size})"
+                    }
+                }
+            }
+            // KMK <--
 
             val currentMangaUpdate = MangaUpdate(
                 id = current.id,

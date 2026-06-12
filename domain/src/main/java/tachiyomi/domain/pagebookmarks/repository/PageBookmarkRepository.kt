@@ -27,5 +27,7 @@ interface PageBookmarkRepository {
 
     suspend fun updateChapterPercentage(id: Long, chapterPercentage: Double)
 
+    suspend fun updateMangaAndChapterInfo(id: Long, newMangaId: Long, chapterId: Long, chapterUrl: String, chapterName: String, chapterNumber: Double, scanlator: String?)
+
     suspend fun getAll(): List<PageBookmark>
 }

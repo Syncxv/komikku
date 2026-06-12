@@ -422,7 +422,11 @@ fun OrphanBookmarksMigrateDialog(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Page ${orphan.pageIndex + 1} from ${orphan.chapterName}",
+                                        text = if (orphan.chapterPercentage >= 0.0) {
+                                            "%.0f%% from %s".format(orphan.chapterPercentage * 100, orphan.chapterName)
+                                        } else {
+                                            "Page ${orphan.pageIndex + 1} from ${orphan.chapterName}"
+                                        },
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSurface,

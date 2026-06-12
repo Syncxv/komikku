@@ -25,6 +25,7 @@ import eu.kanade.domain.manga.model.hasCustomCover
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
+import tachiyomi.domain.pagebookmarks.interactor.GetPageBookmarks
 import kotlinx.coroutines.flow.update
 import mihon.domain.migration.models.MigrationFlag
 import mihon.domain.migration.usecases.MigrateMangaUseCase
@@ -131,9 +132,10 @@ private class MigrateDialogScreenModel(
     private val coverCache: CoverCache = Injekt.get(),
     private val downloadManager: DownloadManager = Injekt.get(),
     private val migrateManga: MigrateMangaUseCase = Injekt.get(),
+    private val getPageBookmarks: GetPageBookmarks = Injekt.get(),
 ) : StateScreenModel<MigrateDialogScreenModel.State>(State()) {
 
-    fun init(current: Manga, target: Manga) {
+    suspend fun init(current: Manga, target: Manga) {
         val applicableFlags = buildList {
             MigrationFlag.entries.forEach {
                 val applicable = when (it) {
@@ -147,6 +149,7 @@ private class MigrateDialogScreenModel(
                     MigrationFlag.REMOVE_DOWNLOAD -> downloadManager.getDownloadCount(current) > 0
                     // KMK -->
                     MigrationFlag.EXTRA -> true
+                    MigrationFlag.PAGE_BOOKMARKS -> getPageBookmarks.awaitForManga(current.id).isNotEmpty()
                     // KMK <--
                 }
                 if (applicable) add(it)

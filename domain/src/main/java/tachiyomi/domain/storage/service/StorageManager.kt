@@ -192,7 +192,7 @@ class StorageManager(
         /**
          * Fallback to scoped storage if no other options are available
          */
-        private fun fallbackToScopedStorage(
+        fun fallbackToScopedStorage(
             context: Context,
             storageDirPref: Preference<String>,
         ) {

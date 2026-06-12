@@ -22,6 +22,7 @@ import eu.kanade.presentation.more.settings.screen.SettingsDataScreen
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.flow.collectLatest
 import tachiyomi.domain.storage.service.StorageManager.Companion.directoryAccessible
+import tachiyomi.domain.storage.service.StorageManager.Companion.fallbackToScopedStorage
 import tachiyomi.domain.storage.service.StoragePreferences
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Button
@@ -52,6 +53,9 @@ internal class StorageStep : OnboardingStep {
         var locationValid by remember(storageDir) {
             mutableStateOf(directoryAccessible(context, storageDir))
         }
+        LaunchedEffect(locationValid) {
+            _isComplete = locationValid
+        }
         // KMK <--
 
         Column(
@@ -79,6 +83,13 @@ internal class StorageStep : OnboardingStep {
                 Text(stringResource(MR.strings.onboarding_storage_action_select))
             }
 
+            Button(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { fallbackToScopedStorage(context, storagePref) },
+            ) {
+                Text(stringResource(MR.strings.action_revert_to_default))
+            }
+
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 8.dp),
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -91,16 +102,6 @@ internal class StorageStep : OnboardingStep {
             ) {
                 Text(stringResource(MR.strings.onboarding_storage_help_action))
             }
-        }
-
-        LaunchedEffect(/* KMK --> */storageDir/* KMK <-- */) {
-            storagePref.changes()
-                .collectLatest {
-                    // KMK -->
-                    locationValid = directoryAccessible(context, storageDir)
-                    _isComplete = locationValid
-                    // KMK <--
-                }
         }
     }
 }

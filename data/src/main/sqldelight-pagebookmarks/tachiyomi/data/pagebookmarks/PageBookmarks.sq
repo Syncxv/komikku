@@ -79,3 +79,8 @@ getAll:
 SELECT *
 FROM page_bookmarks
 ORDER BY added_at DESC;
+
+updateMangaAndChapterInfo:
+UPDATE page_bookmarks
+SET manga_id = :newMangaId, chapter_id = :chapterId, chapter_url = :chapterUrl, chapter_name = :chapterName, chapter_number = :chapterNumber, scanlator = :scanlator
+WHERE _id = :id;
