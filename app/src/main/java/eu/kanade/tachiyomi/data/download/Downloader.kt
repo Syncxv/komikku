@@ -455,8 +455,14 @@ class Downloader(
 
             // KMK -->
             // Backfill legacy page-bookmark percentages now that the chapter's page count is known.
-            download.pages?.size?.let { pageCount ->
-                updatePageBookmarkPercentage.awaitBackfillForChapter(download.chapter.id, pageCount)
+            // Kept non-fatal: a bookmark write failure must not flip the finished download to ERROR.
+            try {
+                download.pages?.size?.let { pageCount ->
+                    updatePageBookmarkPercentage.awaitBackfillForChapter(download.chapter.id, pageCount)
+                }
+            } catch (e: Throwable) {
+                if (e is CancellationException) throw e
+                logcat(LogPriority.WARN, e) { "Failed to backfill page-bookmark percentages" }
             }
             // KMK <--
         } catch (error: Throwable) {

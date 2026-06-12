@@ -229,8 +229,12 @@ class MigrateMangaUseCase(
                             logcat(LogPriority.DEBUG, tag = "PageBookmarkMigration") {
                                 "Skipping duplicate bookmark id=${bookmark.id}: target already has slot $slotKey"
                             }
-                            // On replace the source manga is going away, so drop the redundant row.
-                            if (replace) deletePageBookmark.awaitById(bookmark.id)
+                            // On replace the source manga is going away, so drop the redundant row
+                            // (and its now-orphaned thumbnail).
+                            if (replace) {
+                                deletePageBookmark.awaitById(bookmark.id)
+                                pageBookmarkThumbnailProvider.deleteThumbnail(bookmark.id)
+                            }
                             duplicateCount++
                             continue
                         }

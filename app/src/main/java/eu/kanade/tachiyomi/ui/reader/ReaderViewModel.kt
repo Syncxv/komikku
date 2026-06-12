@@ -568,8 +568,16 @@ class ReaderViewModel @JvmOverloads constructor(
             // KMK -->
             // Now that the page count is known, backfill any legacy bookmarks (percentage < 0) for
             // this chapter in one pass, instead of waiting for the user to scroll past each page.
+            // Decoupled and non-fatal: it must not block or break chapter loading.
             chapter.chapter.id?.let { chapterId ->
-                updatePageBookmarkPercentage.awaitBackfillForChapter(chapterId, pages.size)
+                val pageCount = pages.size
+                viewModelScope.launchNonCancellable {
+                    try {
+                        updatePageBookmarkPercentage.awaitBackfillForChapter(chapterId, pageCount)
+                    } catch (e: Throwable) {
+                        logcat(LogPriority.WARN, e) { "Failed to backfill page-bookmark percentages" }
+                    }
+                }
             }
             // KMK <--
 
