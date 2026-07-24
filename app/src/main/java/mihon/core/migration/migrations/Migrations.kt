@@ -52,5 +52,10 @@ val migrations: List<Migration>
         TrustExtensionRepositoryMigration(),
         CategoryPreferencesCleanupMigration(),
         RemoveDuplicateReaderPreferenceMigration(),
+        // KMK -->
+        DisabledRepoMigration(),
+        SyncPrefKeyMigration(),
+        ChapterUrlHashMigration(),
+        // KMK <--
         PageBookmarksChapterInfoMigration(),
     )
