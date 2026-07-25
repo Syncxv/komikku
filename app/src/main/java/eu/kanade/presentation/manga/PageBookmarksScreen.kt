@@ -219,7 +219,7 @@ fun PageBookmarksScreen(
                                     bottom = MaterialTheme.padding.small,
                                 ),
                         ) {
-                            bookmarks.chunked(3).forEach { rowItems ->
+                            bookmarks.chunked(BOOKMARK_TILE_COLUMNS).forEach { rowItems ->
                                 Row(modifier = Modifier.fillMaxWidth()) {
                                     rowItems.forEach { bookmark ->
                                         BookmarkThumbnailTile(
@@ -231,7 +231,7 @@ fun PageBookmarksScreen(
                                         )
                                     }
                                     // Fill remaining empty slots so items stay the same width
-                                    repeat(3 - rowItems.size) {
+                                    repeat(BOOKMARK_TILE_COLUMNS - rowItems.size) {
                                         Spacer(modifier = Modifier.weight(1f))
                                     }
                                 }
@@ -633,6 +633,9 @@ confirmButton = {
 
 
 
+/** Number of bookmark tiles shown per row. */
+private const val BOOKMARK_TILE_COLUMNS = 2
+
 @Composable
 private fun BookmarkThumbnailTile(
     bookmark: PageBookmark,
@@ -661,6 +664,7 @@ private fun BookmarkThumbnailTile(
                         .build(),
                     contentDescription = null,
                     modifier = Modifier.fillMaxWidth(),
+                    // Keep the screenshot's own aspect ratio so nothing is cropped
                     contentScale = ContentScale.FillWidth,
                 )
                 if (bookmark.chapterPercentage >= 0.0) {
