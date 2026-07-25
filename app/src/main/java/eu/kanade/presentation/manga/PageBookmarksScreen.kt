@@ -99,7 +99,12 @@ fun PageBookmarksScreen(
         state.bookmarks
             .groupBy { it.chapterId }
             .map { (chapterId, bookmarks) ->
-                chapterId to bookmarks.sortedBy { it.pageIndex }
+                // Sort by reading progress within the chapter. `pageIndex` alone is not enough:
+                // in webtoon mode several bookmarks can live on the same (tall) original page and
+                // only differ by `scrollOffset`, which would otherwise leave them in insertion order.
+                chapterId to bookmarks.sortedWith(
+                    compareBy({ it.pageIndex }, { it.scrollOffset }, { it.id }),
+                )
             }
             .sortedBy { (chapterId, _) -> state.chapterIdToOrder[chapterId] ?: Int.MAX_VALUE }
     }
